@@ -749,7 +749,7 @@ static int dlna_finish()
     return res;
 }
 
-static int dlna_discover()
+static int dlna_discover(Context* ctx)
 {
     /* Search for media servers */
     int res = UpnpSearchAsync(handle, MAX_SEARCH_TIME, MEDIA_SERVER_DEVICE_TYPE, nullptr);
@@ -762,7 +762,7 @@ static int dlna_discover()
     return res;
 }
 
-static int dlna_browse()
+static int dlna_browse(Context* ctx)
 {
     return 0;
 }
@@ -950,7 +950,15 @@ browseActionCleanup:
     return std::string();
 }
 
-const Protocol dlna_protocol =
+struct DLNAContext
+{
+    std::string uuid;
+    std::string objid;
+    //std::string friendlyName;
+    std::string location;
+};
+
+extern const Protocol dlna_protocol =
 {
     .name = "dlna",
     .init = dlna_init,

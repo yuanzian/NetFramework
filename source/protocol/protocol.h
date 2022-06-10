@@ -1,20 +1,24 @@
 #pragma once
 #include <string>
 #include <map>
+#include <memory>
+
+struct Protocol;
+struct Context;
 
 struct Protocol
 {
     const std::string name;
     int (*init)();
     int (*finish)();
-    int (*discover)();
-    int (*browse)();
+    int (*discover)(Context* ctx);
+    int (*browse)(Context* ctx);
 };
 
 struct Context
 {
     const struct Protocol proto;
-    void* priv_data;
+    std::shared_ptr<void> priv_data;
     enum Priority
     {
         S, A, B, C
