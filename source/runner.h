@@ -18,23 +18,26 @@ struct Result
 class runner
 {
     std::mutex _ContextMutex, _ResultMutex;
-    std::priority_queue < Context*, std::vector<Context*>,
-        decltype([](Context* left, Context* right) {return left->priority < right->priority; }) > ContextConsumer;
+    std::priority_queue < std::unique_ptr<Context>, std::vector<std::unique_ptr<Context>>,
+        decltype([](const std::unique_ptr<Context>& left, const std::unique_ptr<Context>& right) {return std::less<int>{}(left->priority, right->priority); }) > ContextConsumer;
 
     std::priority_queue < Result, std::vector<Result>,
-        decltype([](Result& left, Result& right) {return left.priority < right.priority; }) > ResultProducer;
+        decltype([](const Result& left, const  Result& right) {return std::less<int>{}(left.priority, right.priority); }) > ResultProducer;
 
     void MainThread();
     std::condition_variable _cv;
     std::mutex _cv_m;
 
-
-    std::function<int()> _worker;
+    std::function<int(const std::unique_ptr<Context>&)> _worker;
     std::function<void()> _noticer;
     volatile bool isNetworkModuleRunning;
 
 public:
-    runner(std::function<int()>&& worker);
+    runner(std::function<int(const std::unique_ptr<Context>&)>&& worker);
     ~runner();
+
+    void AddToConsumer(const Context& ctx);
+    void LockConsumer();
+    void UnlockConsumer();
 
 };

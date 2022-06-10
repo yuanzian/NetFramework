@@ -3,7 +3,7 @@
 
 #include "runner.h"
 
-runner::runner(std::function<int()>&& worker)
+runner::runner(std::function<int(const std::unique_ptr<Context>&)>&& worker)
     : _worker(worker)
     , isNetworkModuleRunning(true)
 {
@@ -21,10 +21,10 @@ void runner::MainThread()
     std::unique_lock<std::mutex> lock(_cv_m);
     while (isNetworkModuleRunning)
     {
-        Context* ctx = nullptr;
+        std::unique_ptr<Context> ctx;
         {
             std::scoped_lock<std::mutex> lock(_ContextMutex);
-            ctx = ContextConsumer.top();
+            ctx = std::move(const_cast<std::unique_ptr<Context>&>(ContextConsumer.top()));
             ContextConsumer.pop();
         }
 
@@ -32,11 +32,13 @@ void runner::MainThread()
         {
             Result res;
             //alloc_res(ctx);
-            int err = _worker();
+            
+            //std::count<<"transfer in "<< reinterpret_cast<std::unique_ptr<DLNAContext>>(ctx->priv_data).
+            int err = _worker(ctx);
             //res.set(err);
 
             //ResultProducer.emplace(res);
-
+            
             std::scoped_lock<std::mutex> lock(_ResultMutex);
             ResultProducer.emplace(std::move(res));
         }
@@ -49,3 +51,20 @@ void runner::MainThread()
             });
     }
 }
+
+void runner::LockConsumer()
+{
+    _ContextMutex.lock();
+}
+
+void runner::UnlockConsumer()
+{
+    _ContextMutex.unlock();
+}
+
+void runner::AddToConsumer(const Context& ctx)
+{
+    std::scoped_lock<std::mutex> lock(_ContextMutex);
+    ContextConsumer.emplace(std::make_unique<Context>(ctx));
+}
+

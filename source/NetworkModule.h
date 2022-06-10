@@ -1,6 +1,8 @@
 #pragma once
 #include <mutex>
 
-namespace NetworkModule{
+#include "runner.h"
 
+namespace NetworkModule {
+    extern "C" runner* GetBrowseRunner();
 }
