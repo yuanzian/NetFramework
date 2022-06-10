@@ -26,3 +26,5 @@ struct Context
 
     Context operator=(const Context& other) { return other; }
 };
+
+Protocol FindProtocol(const std::string& name);

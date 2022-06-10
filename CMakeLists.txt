@@ -25,6 +25,8 @@ endif()
 
 add_subdirectory("third_party/pupnp")
 
+#set_target_properties(${PROJECT_NAME} CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 add_library(${PROJECT_NAME} SHARED)
 target_sources(${PROJECT_NAME} PRIVATE 
     "source/protocol/protocol.cpp"
@@ -55,3 +57,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "third_party/pupnp/upnp/src/threadutil"
     "${PTHREADS4W_SOURCE_DIR}"
 )
+
+add_subdirectory (test)
+enable_testing ()
+add_test (NAME MyTest COMMAND Test)
