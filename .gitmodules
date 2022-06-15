@@ -1,3 +1,6 @@
 [submodule "third_party/pupnp"]
 	path = third_party/pupnp
 	url = https://github.com/Arlen-LT/pupnp.git
+[submodule "third_party/libsmb2"]
+	path = third_party/libsmb2
+	url = https://github.com/Arlen-LT/libsmb2.git

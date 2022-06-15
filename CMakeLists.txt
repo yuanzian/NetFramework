@@ -24,6 +24,7 @@ else()
 endif()
 
 add_subdirectory("third_party/pupnp")
+add_subdirectory("third_party/libsmb2")
 
 #set_target_properties(${PROJECT_NAME} CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -39,6 +40,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} UPNP::Static)
+target_link_libraries(${PROJECT_NAME} smb2)
 target_compile_definitions (${PROJECT_NAME}
     PUBLIC $<IF:$<CONFIG:Debug>,DEBUG,NDEBUG>
     PUBLIC $<$<BOOL:${MSVC}>:UPNP_USE_MSVCPP>
