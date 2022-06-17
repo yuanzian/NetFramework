@@ -3,10 +3,10 @@ cmake_minimum_required(VERSION 3.16)
 project(NetworkModule CXX)
 
 include(CheckCXXCompilerFlag)
-if(WIN32)
+if(MSVC)
     CHECK_CXX_COMPILER_FLAG("/std:c++20" COMPILER_SUPPORTS_CXX20)
     CHECK_CXX_COMPILER_FLAG("/utf-8" COMPILER_SUPPORTS_UTF8)
-elseif(ANDROID OR APPLE)
+else()
     CHECK_CXX_COMPILER_FLAG("-std=c++20" COMPILER_SUPPORTS_CXX20)
 endif()
 
@@ -27,8 +27,10 @@ add_subdirectory("third_party/pupnp")
 add_subdirectory("third_party/libdsm")
 add_subdirectory("third_party/libsmb2")
 
-#set_target_properties(${PROJECT_NAME} CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+if(WIN32)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 add_library(${PROJECT_NAME} SHARED)
 target_sources(${PROJECT_NAME} PRIVATE 
     "source/protocol/protocol.cpp"
@@ -65,12 +67,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     #libdsm
     "third_party/libdsm/include"
     "third_party/libdsm/include/bdsm"
-    "third_party/libdsm/include/msvc"
+    "$<$<BOOL:${MSVC}>:${CMAKE_CURRENT_SOURCE_DIR}/third_party/libdsm/include/msvc>"
 
     #libsmb2
     "third_party/libsmb2/include"
     "third_party/libsmb2/include/smb2"
-    "third_party/libsmb2/include/msvc"
+    "$<$<BOOL:${MSVC}>:${CMAKE_CURRENT_SOURCE_DIR}/third_party/libsmb2/include/msvc>"
 )
 
 add_subdirectory (test)
