@@ -4,3 +4,6 @@
 [submodule "third_party/libsmb2"]
 	path = third_party/libsmb2
 	url = https://github.com/Arlen-LT/libsmb2.git
+[submodule "third_party/libdsm"]
+	path = third_party/libdsm
+	url = https://github.com/Arlen-LT/libdsm.git
