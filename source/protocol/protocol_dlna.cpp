@@ -478,7 +478,7 @@ static void ParseNewServer(IXML_Document* doc, const char* location)
             {
                 UpnpDeviceMap.emplace(std::piecewise_construct, std::forward_as_tuple(udn),
                     std::forward_as_tuple(udn, friendlyName, location, iconUrl, manufacturerString));
-                Log(LEVEL_INFO, "Device found: DeviceType=%s, UDN=%s, Name=%s", deviceType, udn, friendlyName);
+                //Log(LEVEL_INFO, "Device found: DeviceType=%s, UDN=%s, Name=%s", deviceType, udn, friendlyName);
             }
         }
 
@@ -504,7 +504,7 @@ static void ParseNewServer(IXML_Document* doc, const char* location)
             }
 
             /* Try to browse content directory. */
-            Log(LEVEL_INFO, "%s support service:%s, BaseURL=%s, ControlURL=%s", friendlyName, serviceType, baseURL, controlURL);
+            //Log(LEVEL_INFO, "%s support service:%s, BaseURL=%s, ControlURL=%s", friendlyName, serviceType, baseURL, controlURL);
             std::lock_guard<std::mutex> lock(UpnpDeviceMapMutex);
             auto itr = UpnpDeviceMap.find(udn);
             if (itr != UpnpDeviceMap.end())
@@ -517,12 +517,12 @@ static void ParseNewServer(IXML_Document* doc, const char* location)
             int ret = UpnpResolveURL(baseURL, controlURL, url);
             if (ret == UPNP_E_SUCCESS)
             {
-                Log(LEVEL_INFO, "UpnpResolveURL success, add device %s", friendlyName);
+                //Log(LEVEL_INFO, "UpnpResolveURL success, add device %s", friendlyName);
                 itr->second.location = url;
                 //std::lock_guard<std::mutex> deviceQueueLock(deviceQueueMutex);
                 //queueAddDeviceInfo.emplace(std::make_shared<UpnpDevice>(itr->second));
             }
-            else Log(LEVEL_ERROR, "UpnpResolveURL return %d, error: %d", ret, errno);
+            else //Log(LEVEL_ERROR, "UpnpResolveURL return %d, error: %d", ret, errno);
             free(url);
         }
         ixmlNodeList_free(serviceList);
@@ -604,7 +604,7 @@ static char8_t* GetBestAdapterInterfaceName()
         &adapts_size);
     if (ret != ERROR_BUFFER_OVERFLOW)
     {
-        Log(LEVEL_ERROR, "GetAdaptersAddresses failed to find list of adapters");
+        //Log(LEVEL_ERROR, "GetAdaptersAddresses failed to find list of adapters");
         return NULL;
     }
 
@@ -617,7 +617,7 @@ static char8_t* GetBestAdapterInterfaceName()
         &adapts_size);
     if (ret != 0)
     {
-        Log(LEVEL_ERROR, "GetAdaptersAddresses failed to find list of adapters");
+        //Log(LEVEL_ERROR, "GetAdaptersAddresses failed to find list of adapters");
         return NULL;
     }
 
@@ -690,7 +690,7 @@ done:
         char8_t* tmpIfName = (char8_t*)calloc(LINE_SIZE, sizeof(char8_t));
         int ret = WideCharToMultiByte(CP_UTF8, 0, bestAdapter->FriendlyName, -1, NULL, 0, NULL, NULL);
         ret = WideCharToMultiByte(CP_UTF8, 0, bestAdapter->FriendlyName, ret, reinterpret_cast<char*>(tmpIfName), ret, NULL, NULL);
-        Log(LEVEL_INFO, "Get the best ip is %s, ifname is %s", tmpIp, reinterpret_cast<char*>(tmpIfName));
+        //Log(LEVEL_INFO, "Get the best ip is %s, ifname is %s", tmpIp, reinterpret_cast<char*>(tmpIfName));
         free(adapts);
         return tmpIfName;
     }
@@ -710,20 +710,20 @@ static int dlna_init()
 #endif
     if (res != UPNP_E_SUCCESS)
     {
-        Log(LEVEL_ERROR, "Upnp SDK Init error %s", UpnpGetErrorMessage(res));
+        //Log(LEVEL_ERROR, "Upnp SDK Init error %s", UpnpGetErrorMessage(res));
         return res;
     }
-    Log(LEVEL_INFO, "Upnp SDK init success");
+    //Log(LEVEL_INFO, "Upnp SDK init success");
     ixmlRelaxParser(1);
 
     /* Register a control point */
     res = UpnpRegisterClient(UpnpRegisterClientCallback, nullptr, &handle);
     if (res != UPNP_E_SUCCESS)
     {
-        Log(LEVEL_ERROR, "Upnp control point register failed, return %s", UpnpGetErrorMessage(res));
+        //Log(LEVEL_ERROR, "Upnp control point register failed, return %s", UpnpGetErrorMessage(res));
         return res;
     }
-    Log(LEVEL_INFO, "Upnp control point register success, handle is %d", handle);
+    //Log(LEVEL_INFO, "Upnp control point register success, handle is %d", handle);
     UpnpSetMaxContentLength(INT_MAX);
     isDLNAModuleRunning = true;
     return res;
@@ -734,17 +734,17 @@ static int dlna_finish()
     int res = UpnpUnRegisterClient(handle);
     if (res != UPNP_E_SUCCESS)
     {
-        Log(LEVEL_ERROR, "Upnp control point unregister failed, return %s", UpnpGetErrorMessage(res));
+        //Log(LEVEL_ERROR, "Upnp control point unregister failed, return %s", UpnpGetErrorMessage(res));
         return res;
     }
 
     res = UpnpFinish();
     if (res != UPNP_E_SUCCESS)
     {
-        Log(LEVEL_ERROR, "Upnp SDK finished failed");
+        //Log(LEVEL_ERROR, "Upnp SDK finished failed");
         return res;
     }
-    Log(LEVEL_INFO, "Upnp SDK finished success");
+    //Log(LEVEL_INFO, "Upnp SDK finished success");
     isDLNAModuleRunning = false;
     return res;
 }
@@ -755,10 +755,10 @@ static int dlna_discover(Context* ctx)
     int res = UpnpSearchAsync(handle, MAX_SEARCH_TIME, MEDIA_SERVER_DEVICE_TYPE, nullptr);
     if (res != UPNP_E_SUCCESS)
     {
-        Log(LEVEL_ERROR, "Searching server failed");
+        //Log(LEVEL_ERROR, "Searching server failed");
         return res;
     }
-    Log(LEVEL_INFO, "Searching server success");
+    //Log(LEVEL_INFO, "Searching server success");
     return res;
 }
 
@@ -927,7 +927,7 @@ static std::string BrowseAction(const char* objectID,
 
     if (res || !browseResultXMLDocument)
     {
-        Log(LEVEL_ERROR, "UpnpSendAction return %s", UpnpGetErrorMessage(res));
+        //Log(LEVEL_ERROR, "UpnpSendAction return %s", UpnpGetErrorMessage(res));
         goto browseActionCleanup;
     }
     browseResultString = ConvertXMLtoString(rawXML = ixmlPrintDocument(browseResultXMLDocument));
@@ -937,7 +937,7 @@ static std::string BrowseAction(const char* objectID,
     browseResultXMLDocument = ixmlParseBuffer(browseResultString.data());
     if (browseResultXMLDocument == nullptr)
     {
-        Log(LEVEL_ERROR, "Parse result to XML format failed");
+        //Log(LEVEL_ERROR, "Parse result to XML format failed");
         goto browseActionCleanup;
     }
     browseResultString = ixmlPrintDocument(browseResultXMLDocument);
