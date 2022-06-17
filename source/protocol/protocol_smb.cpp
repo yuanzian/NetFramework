@@ -1,8 +1,9 @@
+#include <cstring>
 #include <string>
 #include <fstream>
 #include <future>
 
-#if __ANDROID__
+#if __ANDROID__ || __linux__
 #include <unistd.h>
 #include <netinet/in.h>
 #include <netdb.h>

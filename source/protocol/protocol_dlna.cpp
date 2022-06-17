@@ -2,6 +2,7 @@
 #include <memory>
 #include <mutex>
 #include <regex>
+#include <cstdarg>
 
 #include "upnpapi.h"
 #include "ixml.h"
@@ -701,7 +702,7 @@ done:
 
 static int dlna_init()
 {
-#if __ANDROID__
+#if __ANDROID__ || __linux__
     int res = UpnpInit2(nullptr, 0);
 #elif _WIN64
     char8_t* bestAdapterName = GetBestAdapterInterfaceName();

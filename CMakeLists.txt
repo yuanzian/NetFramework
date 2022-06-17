@@ -10,9 +10,13 @@ else()
     CHECK_CXX_COMPILER_FLAG("-std=c++20" COMPILER_SUPPORTS_CXX20)
 endif()
 
+
 if(COMPILER_SUPPORTS_CXX20)
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    set(CLANG_DEFAULT_CXX_STDLIB "libc++")
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 else()
     message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++20 support. Please use a different C++ compiler.")
 endif()
