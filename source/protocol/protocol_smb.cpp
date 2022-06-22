@@ -16,43 +16,120 @@
 #endif
 
 #include "protocol.h"
-extern "C" {
-#include "bdsm.h"
-}
-#include "libsmb2.h"
-#include "smb2.h"
+#include "protocol_smb.h"
+#include "rules.h"
 
-struct SMBContext
+
+extern const Protocol smb_protocol =
 {
-    std::string server;
-    std::string share;
-    std::string userID;
-    std::string password;
-    smb_session* session;
-    smb_tid tid;
-    smb2_context* smb2;
-    time_t tmSessionConLastUse;
-    time_t delayDeconstruct;
-    enum SambaVersion
-    {
-        SMB_UNDEFINED = 0,
-        SMB1 = 1,
-        SMB2_02 = 0x0202,
-        SMB2_10 = 0x0210,
-        SMB3_00 = 0x0300,
-        SMB3_02 = 0x0302,
-        SMB3_11 = 0x0311
-    }version;
+    .name = "smb",
+    .discover = smb_discover,
+    .browse = smb_browse
 };
 
-static int smb_discover(Context* ctx)
+static int smb_discover(const std::unique_ptr<Context>& ctx)
 {
     return 0;
 }
 
-static int smb_browse(Context* ctx)
+static int smb_browse(const std::unique_ptr<Context>& ctx)
 {
-    smb2_init_context();
+    std::vector<std::tuple<std::string, uint64_t, uint64_t>> vectorVideoProperty;
+    std::vector<std::string> vectorSubtitleProperty;
+    std::vector<std::string> vectorPictureProperty;
+    std::multimap<std::string, std::string> mapSubtitleProperty;
+    std::multimap<std::string, std::string> mapThumbnailProperty;
+    std::ostringstream xt;
+
+    void* files = nullptr;
+    void* file = nullptr;
+
+    int ret = smbc_connect_share(ctx);
+    files = smbc_opendir(ctx);
+    while ((file = smbc_readdir(ctx, files)) != nullptr)
+    {
+        std::string name;
+        uint64_t cTime;
+        uint64_t size;
+        bool isDir;
+        smbc_resolve_file_stat(ctx, file, name, cTime, size, isDir);
+
+        if (isDir)
+        {
+            xt << R"(<item type="directory"><name>)" << name << R"(</name>)" << R"(<date>)" << cTime << R"(</date></item>)";
+        }
+        else if (IsVideo(name))
+        {
+            vectorVideoProperty.emplace_back(name, cTime, size);
+        }
+        else if (IsSubtitle(name) && size > 0 && (size >> 20) < 5)
+        {
+            vectorSubtitleProperty.emplace_back(name);
+        }
+        else if (IsPicture(name))
+        {
+            vectorPictureProperty.emplace_back(name);
+        }
+    }
+    smbc_closedir(ctx, files);
+
+    if (!vectorVideoProperty.empty() && !vectorSubtitleProperty.empty())
+    {
+        for (const auto& [video, cTime, size] : vectorVideoProperty)
+        {
+            std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
+            for (auto it = vectorSubtitleProperty.begin(); it != vectorSubtitleProperty.end();)
+            {
+                std::string subtitle = *it;
+                std::string subtitleWithoutSuffix = subtitle.substr(0, subtitle.find_last_of('.'));
+                if (is_video_name_match(subtitleWithoutSuffix, videoWithoutSuffix)
+                    || subtitleWithoutSuffix.find(videoWithoutSuffix) != std::string::npos)
+                {
+                    mapSubtitleProperty.emplace(video, subtitle);
+                    it = vectorSubtitleProperty.erase(it);
+                }
+                else ++it;
+            }
+        }
+    }
+
+    //if (!vectorVideoProperty.empty() && !vectorPictureProperty.empty())
+    //{
+    //    for (const auto& [video, cTime, size] : vectorVideoProperty)
+    //    {
+    //        std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
+    //        for (const std::string& picture : vectorPictureProperty)
+    //        {
+    //            std::string pictureWithoutSuffix = picture.substr(0, picture.find_last_of('.'));
+    //            if (videoWithoutSuffix == pictureWithoutSuffix)
+    //            {
+    //                mapThumbnailProperty.emplace(video, picture);
+    //                break;
+    //            }
+    //        }
+    //    }
+    //}
+
+    for (const auto& [video, cTime, size] : vectorVideoProperty)
+    {
+        xt << R"(<item type="file"><name>)" << video <<
+            "</name><date>" << cTime <<
+            "</date><size>" << size << "</size>";
+
+        const auto& [subtitleEntryBegin, subtitleEntryEnd] = mapSubtitleProperty.equal_range(video);
+        for_each(subtitleEntryBegin, subtitleEntryEnd,
+            [&](std::pair<const std::string, std::string>& subtitleEntry) {
+                xt << "<subtitle>" << subtitleEntry.second << "</subtitle>";
+            });
+
+        const auto& [thumbnailEntryBegin, thumbnailEntryEnd] = mapThumbnailProperty.equal_range(video);
+        for_each(thumbnailEntryBegin, thumbnailEntryEnd,
+            [&](std::pair<const std::string, std::string>& thumbnailEntry) {
+                xt << "<thumbnail>" << thumbnailEntry.second << "</thumbnail>";
+            });
+        xt << "</item>";
+    }
+    xt << "</folderxml>";
     return 0;
 }
 
@@ -88,18 +165,8 @@ using namespace std::chrono_literals;
 //    }
 //}
 
-enum LoginError
-{
-    SMBC_LOGIN_SUCCESS = 0,
-    SMBC_LOGIN_UNKNOWNERROR = -1,
-    SMBC_LOGIN_PASSWORDERROR = -2,
-    SMBC_LOGIN_CONNECTIONERROR = -3,
-    SMBC_LOGIN_AUTHORITYERROR = -4,
-    SMBC_LOGIN_INITSESSIONERROR = -5,
-    SMBC_LOGIN_PROTOCOLERROR = -6
-};
 
-LoginError smbc_connect_share(Context* ctx)
+LoginError smbc_connect_share(const std::unique_ptr<Context>& ctx)
 {
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
@@ -274,62 +341,98 @@ error:
 //    }
 //}
 //
-//void* smbc_opendir(const std::string& path)
-//{
-//    if (version == SMB1)
-//    {
-//        return smb_find(session, tid, (path + "\\*").data());
-//    }
-//    else
-//    {
-//        return smb2_opendir(smb2, path.data());
-//    }
-//}
-//
-//void* smbc_readdir(void*& dir)
-//{
-//    if (version == SMB1)
-//    {
-//        return smb_stat_list_read((smb_stat_list*)&dir);
-//    }
-//    else
-//    {
-//        return smb2_readdir(smb2, (smb2dir*)dir);
-//    }
-//}
-//
-//void smbc_resolve_file_stat(void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
-//{
-//    if (version == SMB1)
-//    {
-//        smb_stat st = (smb_stat)ent;
-//        name = smb_stat_name(st);
-//        cTime = smb_stat_get(st, SMB_STAT_CTIME) / 10000000 - 11644473600;
-//        size = smb_stat_get(st, SMB_STAT_SIZE);
-//        isDir = smb_stat_get(st, SMB_STAT_ISDIR);
-//    }
-//    else
-//    {
-//        smb2_stat_64 st = ((smb2dirent*)ent)->st;
-//        name = ((smb2dirent*)ent)->name;
-//        cTime = st.smb2_ctime;
-//        size = st.smb2_size;
-//        isDir = st.smb2_type & SMB2_FILE_ATTRIBUTE_DIRECTORY;
-//    }
-//}
-//
-//void smbc_closedir(void* files)
-//{
-//    if (version == SMB1)
-//    {
-//        smb_stat_list_destroy((smb_stat_list)files);
-//    }
-//    else
-//    {
-//        smb2_closedir(smb2, (smb2dir*)files);
-//    }
-//}
-//
+void* smbc_opendir(const std::unique_ptr<Context>& ctx)
+{
+    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
+
+    switch (smbc->version)
+    {
+    case SMBContext::SMB1:
+        return smb_find(smbc->session, smbc->tid, (smbc->path + "\\*").data());
+    case SMBContext::SMB2_02:
+    case SMBContext::SMB2_10:
+    case SMBContext::SMB3_00:
+    case SMBContext::SMB3_02:
+    case SMBContext::SMB3_11:
+        return smb2_opendir(smbc->smb2, smbc->path.data());
+    default:
+        return nullptr;
+    }
+}
+
+void* smbc_readdir(const std::unique_ptr<Context>& ctx, void*& dir)
+{
+    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
+
+    switch (smbc->version)
+    {
+    case SMBContext::SMB1:
+        return smb_stat_list_read((smb_stat_list*)&dir);
+    case SMBContext::SMB2_02:
+    case SMBContext::SMB2_10:
+    case SMBContext::SMB3_00:
+    case SMBContext::SMB3_02:
+    case SMBContext::SMB3_11:
+        return smb2_readdir(smbc->smb2, (smb2dir*)dir);
+    default:
+        return nullptr;
+    }
+}
+
+void smbc_resolve_file_stat(const std::unique_ptr<Context>& ctx, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
+{
+    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
+
+    switch (smbc->version)
+    {
+    case SMBContext::SMB1:
+    {
+        smb_stat st = (smb_stat)ent;
+        name = smb_stat_name(st);
+        cTime = smb_stat_get(st, SMB_STAT_CTIME) / 10000000 - 11644473600;
+        size = smb_stat_get(st, SMB_STAT_SIZE);
+        isDir = smb_stat_get(st, SMB_STAT_ISDIR);
+    }
+    break;
+    case SMBContext::SMB2_02:
+    case SMBContext::SMB2_10:
+    case SMBContext::SMB3_00:
+    case SMBContext::SMB3_02:
+    case SMBContext::SMB3_11:
+    {
+        smb2_stat_64 st = ((smb2dirent*)ent)->st;
+        name = ((smb2dirent*)ent)->name;
+        cTime = st.smb2_ctime;
+        size = st.smb2_size;
+        isDir = st.smb2_type & SMB2_FILE_ATTRIBUTE_DIRECTORY;
+    }
+    break;
+    default:
+        break;
+    }
+}
+
+void smbc_closedir(const std::unique_ptr<Context>& ctx, void* files)
+{
+    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
+
+    switch (smbc->version)
+    {
+    case SMBContext::SMB1:
+        smb_stat_list_destroy((smb_stat_list)files);
+        break;
+    case SMBContext::SMB2_02:
+    case SMBContext::SMB2_10:
+    case SMBContext::SMB3_00:
+    case SMBContext::SMB3_02:
+    case SMBContext::SMB3_11:
+        smb2_closedir(smbc->smb2, (smb2dir*)files);
+        break;
+    default:
+        break;
+    }
+}
+
 //void* smbc_open(const char* file, int flag)
 //{
 //    if (version == SMB1)
@@ -403,10 +506,3 @@ error:
 //        smb2_close(smb2, (smb2fh*)fh);
 //    }
 //}
-
-extern const Protocol smb_protocol =
-{
-    .name = "smb",
-    .discover = smb_discover,
-    .browse = smb_browse
-};

@@ -11,8 +11,8 @@ struct Protocol
     const std::string name;
     int (*init)();
     int (*finish)();
-    int (*discover)(Context* ctx);
-    int (*browse)(Context* ctx);
+    int (*discover)(const std::unique_ptr<Context>& ctx);
+    int (*browse)(const std::unique_ptr<Context>& ctx);
 };
 
 struct Context
