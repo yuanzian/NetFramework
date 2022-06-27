@@ -41,7 +41,6 @@ target_sources(${PROJECT_NAME} PRIVATE
     "source/protocol/protocol_dlna.cpp"
     "source/protocol/protocol_smb.cpp"
     "source/NetworkModule.cpp"
-    "source/runner.cpp"
     "source/protocol/rules.cpp"
 )
 
