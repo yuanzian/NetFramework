@@ -7,16 +7,14 @@ namespace NetworkModule
         BrowseRunner(
             []( Context* ctx, std::string path)
             {
-                return 0;
-                //return ctx.proto.browse(ctx);
+                return ctx->proto.browse(ctx);
             }
     );
 
     runner<std::function<int(Context*)>, Context*> SearchRunner(
         [](Context* ctx)
         {
-            return 0;
-            //return ctx->proto.discover(ctx);
+            return ctx->proto.discover(ctx);
         }
     );
 

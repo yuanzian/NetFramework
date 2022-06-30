@@ -5,7 +5,7 @@
 #include <queue>
 #include <functional>
 #include <concepts>
-
+#include <iostream>
 #include "protocol/protocol.h"
 
 struct Result
@@ -68,21 +68,23 @@ private:
         std::unique_lock<std::mutex> lock(_cv_m);
         while (isNetworkModuleRunning)
         {
-            Task* pTask = nullptr;
+            bool hasCurrentTask = false;
+            Task currentTask;
             {
                 std::scoped_lock<std::mutex> lock(_ContextMutex);
                 if (!TaskConsumer.empty())
                 {
-                    *pTask = std::move(TaskConsumer.top());
+                    currentTask = std::move(TaskConsumer.top());
+                    hasCurrentTask = true;
                     TaskConsumer.pop();
                 }
             }
 
-            if (pTask)
+            if (hasCurrentTask)
             {
                 Result res;
 
-                std::invoke_result_t<Fn, Args...> err = std::apply(_worker, *pTask);
+                std::invoke_result_t<Fn, Args...> err = std::apply(_worker, currentTask);
 
                 std::scoped_lock<std::mutex> lock(_ResultMutex);
                 ResultProducer.emplace(std::move(res));

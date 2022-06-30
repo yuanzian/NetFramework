@@ -19,7 +19,6 @@
 #include "protocol_smb.h"
 #include "rules.h"
 
-
 extern const Protocol smb_protocol =
 {
     .name = "smb",
@@ -27,12 +26,12 @@ extern const Protocol smb_protocol =
     .browse = smb_browse
 };
 
-static int smb_discover(const std::unique_ptr<Context>& ctx)
+static int smb_discover(Context* ctx)
 {
     return 0;
 }
 
-static int smb_browse(const std::unique_ptr<Context>& ctx)
+static int smb_browse(Context* ctx)
 {
     std::vector<std::tuple<std::string, uint64_t, uint64_t>> vectorVideoProperty;
     std::vector<std::string> vectorSubtitleProperty;
@@ -166,7 +165,7 @@ using namespace std::chrono_literals;
 //}
 
 
-LoginError smbc_connect_share(const std::unique_ptr<Context>& ctx)
+LoginError smbc_connect_share(Context* ctx)
 {
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
@@ -341,7 +340,7 @@ error:
 //    }
 //}
 //
-void* smbc_opendir(const std::unique_ptr<Context>& ctx)
+void* smbc_opendir(Context* ctx)
 {
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
@@ -360,7 +359,7 @@ void* smbc_opendir(const std::unique_ptr<Context>& ctx)
     }
 }
 
-void* smbc_readdir(const std::unique_ptr<Context>& ctx, void*& dir)
+void* smbc_readdir(Context* ctx, void*& dir)
 {
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
@@ -379,7 +378,7 @@ void* smbc_readdir(const std::unique_ptr<Context>& ctx, void*& dir)
     }
 }
 
-void smbc_resolve_file_stat(const std::unique_ptr<Context>& ctx, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
+void smbc_resolve_file_stat(Context* ctx, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
 {
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
@@ -412,7 +411,7 @@ void smbc_resolve_file_stat(const std::unique_ptr<Context>& ctx, void* ent, std:
     }
 }
 
-void smbc_closedir(const std::unique_ptr<Context>& ctx, void* files)
+void smbc_closedir(Context* ctx, void* files)
 {
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 

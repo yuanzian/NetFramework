@@ -750,7 +750,7 @@ static int dlna_finish()
     return res;
 }
 
-static int dlna_discover(const std::unique_ptr<Context>& ctx)
+static int dlna_discover(Context* ctx)
 {
     /* Search for media servers */
     int res = UpnpSearchAsync(handle, MAX_SEARCH_TIME, MEDIA_SERVER_DEVICE_TYPE, nullptr);
@@ -763,7 +763,7 @@ static int dlna_discover(const std::unique_ptr<Context>& ctx)
     return res;
 }
 
-static int dlna_browse(const std::unique_ptr<Context>& ctx)
+static int dlna_browse(Context* ctx)
 {
     return 0;
 }
