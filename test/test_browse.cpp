@@ -7,14 +7,6 @@
 
 using namespace NetworkModule;
 
-struct DLNAContext
-{
-    std::string uuid;
-    std::string objid;
-    //std::string friendlyName;
-    std::string location;
-};
-
 int main()
 {
     //Test();
@@ -40,8 +32,6 @@ int main()
 
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(7s);
-
-    std::cout << "test\n";
 
     system("pause");
     //runner<std::function<int(std::unique_ptr<int>, Context*)>, std::unique_ptr<int>, Context*> test{
