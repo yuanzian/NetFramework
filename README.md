@@ -11,6 +11,7 @@
 [![x86-64](https://img.shields.io/badge/Arch-x86--64-brightgreen?style=plastic)](https://en.wikipedia.org/wiki/X86-64)
 [![Arm32](https://img.shields.io/badge/Arch-Arm32-brightgreen?style=plastic)](https://en.wikipedia.org/wiki/ARM_architecture_family)
 
+Designed as a module collabrated with some software, e.g. SKYBOX VR Player.
 
 ## Feature
 * ***Discover*** - search devices
@@ -39,6 +40,6 @@ cmake -S . -B build
 ```
 
 ## TODO
-* 
-
-
+* Many test usages
+* Multi-Platform compiling compability
+* Cross-compile
