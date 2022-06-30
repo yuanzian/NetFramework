@@ -16,7 +16,7 @@
 * ***Discover*** - search devices
 * ***Browser*** - list files and directories
 * ***Manager*** - download files
-* ***Customized Protocol*** - add any protocol like ```file://``` or ```http://``` to ```source/protocol/$Any_protocol.cpp```, and register in ```protocol.cpp```
+* ***Customized Protocol*** - add any protocol like `file://` or `http://` to `source/protocol/$Any_protocol.cpp`, and register in `protocol.cpp`
 
 ## Clone
 ```
