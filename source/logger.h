@@ -7,10 +7,21 @@ namespace logger {
     std::mutex logger_mutex;
     std::filesystem::path logFile;
 
+    enum class logLevel : char
+    {
+        Trace = 'T',
+        Debug = 'D',
+        Info = 'I',
+        Warning = 'W',
+        Error = 'E',
+        Fatal = 'F'
+    };
+
     template <typename... Args>
     struct Log
     {
-        Log(const char* format, Args&&... args, const std::source_location& location = std::source_location::current())
+        Log(logLevel level, const char* format, Args&&... args,
+            const std::source_location& location = std::source_location::current())
         {
             std::ofstream outLogFileStream{ logFile, std::ios::out | std::ios::app };
             if (!outLogFileStream.is_open())
@@ -19,8 +30,8 @@ namespace logger {
             time_t current = std::time(nullptr);
             outLogFileStream << std::left
                 << std::put_time(std::localtime(&current), "%F %T ")
-                << "[I]" //TODO: log level
-                << "[thread {" << std::this_thread::get_id() << "}]"
+                << "[" << static_cast<char>(level) << "]"
+                << "[thread " << std::this_thread::get_id() << "]"
                 << location.file_name()
                 << "(" << location.line() << ":" << location.column() << ")"
                 << std::quoted(location.function_name()) << ": "
@@ -30,5 +41,5 @@ namespace logger {
     };
 
     template <typename... Args>
-    Log(const char*, Args&&...)->Log<Args...>;
+    Log(logLevel, const char*, Args&&...)->Log<Args...>;
 }
