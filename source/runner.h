@@ -32,6 +32,12 @@ public:
         std::thread(&runner::MainThread, this).detach();
     }
 
+    runner(const runner&) = delete;
+    runner& operator=(const runner&) = delete;
+
+    runner(runner&&) = delete;
+
+
     ~runner()
     {
         isNetworkModuleRunning = false;
@@ -59,6 +65,12 @@ public:
     {
         std::scoped_lock<std::mutex> lock(_ContextMutex);
         TaskConsumer.emplace(std::forward_as_tuple(args...));
+        _cv.notify_all();
+    }
+
+    bool IsInitialized()
+    {
+        return isNetworkModuleRunning;
     }
 
 private:

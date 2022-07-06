@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 extern "C" {
 #include "bdsm.h"
 }
@@ -29,9 +31,9 @@ struct SMBContext
     smb2_context* smb2;
     time_t tmSessionConLastUse;
     time_t delayDeconstruct;
-    enum SambaVersion
+    enum class SambaVersion :int
     {
-        SMB_UNDEFINED = 0,
+        SMB_UNDEFINED = -1,
         SMB1 = 1,
         SMB2_02 = 0x0202,
         SMB2_10 = 0x0210,

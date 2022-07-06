@@ -1,5 +1,4 @@
 #include <cstring>
-#include <string>
 #include <fstream>
 #include <future>
 
@@ -12,12 +11,46 @@
 
 #if _WIN64
 #include "sys/socket.h"
-#define gettid() GetCurrentThreadId()
 #endif
 
 #include "protocol.h"
 #include "protocol_smb.h"
 #include "rules.h"
+#include "source/logger.h"
+
+inline std::string Encrypt(const char* src)
+{
+    int length = strlen(src);
+    std::string dst(src, length);
+    if (length <= 2)
+    {
+        for (int i = 0; i < length; i++)
+        {
+            dst[i] = '*';
+        }
+    }
+    else if (length <= 5)
+    {
+        dst[0] = src[0];
+        for (int i = 1; i < length - 1; i++)
+        {
+            dst[i] = '*';
+        }
+        dst[length - 1] = src[length - 1];
+    }
+    else
+    {
+        dst[0] = src[0];
+        dst[1] = src[1];
+        for (int i = 2; i < length - 2; i++)
+        {
+            dst[i] = '*';
+        }
+        dst[length - 2] = src[length - 2];
+        dst[length - 1] = src[length - 1];
+    }
+    return dst;
+}
 
 extern const Protocol smb_protocol =
 {
@@ -33,6 +66,9 @@ static int smb_discover(Context* ctx)
 
 static int smb_browse(Context* ctx)
 {
+    std::cout << "start smb_browse\n";
+    logger::Log(logger::logLevel::Trace, "start smb_browse");
+
     std::vector<std::tuple<std::string, uint64_t, uint64_t>> vectorVideoProperty;
     std::vector<std::string> vectorSubtitleProperty;
     std::vector<std::string> vectorPictureProperty;
@@ -43,6 +79,7 @@ static int smb_browse(Context* ctx)
     void* files = nullptr;
     void* file = nullptr;
 
+    xt << "<folderxml>";
     int ret = smbc_connect_share(ctx);
     files = smbc_opendir(ctx);
     while ((file = smbc_readdir(ctx, files)) != nullptr)
@@ -129,6 +166,7 @@ static int smb_browse(Context* ctx)
         xt << "</item>";
     }
     xt << "</folderxml>";
+    logger::Log(logger::logLevel::Trace, "{}", xt.str());
     return 0;
 }
 
@@ -170,12 +208,12 @@ LoginError smbc_connect_share(Context* ctx)
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     LoginError loginErrorCode = SMBC_LOGIN_SUCCESS;
-    //Log(LEVEL_INFO, "Trying to connect %s with SMB2 protocol.", server.c_str());
+    logger::Log(logger::logLevel::Info, "Trying to connect {} with SMB2 protocol.", smbc->server);
     smbc->smb2 = smb2_init_context();
     if (smbc->smb2 == nullptr)
     {
-        //Log(LEVEL_ERROR, "Init SMB2 session failed: smb://%s:%s@%s/%s", 
-            //Encrypt(userID.c_str()).c_str(), Encrypt(password.c_str()).c_str(), server.c_str(), share.c_str());
+        logger::Log(logger::logLevel::Error, "Init SMB2 session failed: smb://{}:{}@{}/{}",
+            smbc->userID, smbc->password, smbc->server, smbc->share);
         return SMBC_LOGIN_INITSESSIONERROR;
     }
 
@@ -196,7 +234,7 @@ connect:
         {
             if (smb2_get_negotiate_version(smbc->smb2) == SMB2_VERSION_ANY || smb2_get_negotiate_version(smbc->smb2) == SMB2_VERSION_0311)
             {
-                //Log(LEVEL_WARNING, "Cur negotiate version is SMB2_VERSION_0311, try to use ANY_VERSION_EXCEPT_0311.");
+                logger::Log(logger::logLevel::Warning, "Cur negotiate version is SMB2_VERSION_0311, try to use ANY_VERSION_EXCEPT_0311.");
                 smb2_disconnect_share(smbc->smb2);
                 smb2_destroy_context(smbc->smb2);
                 smbc->smb2 = smb2_init_context();
@@ -215,25 +253,26 @@ connect:
         }
         else loginErrorCode = SMBC_LOGIN_UNKNOWNERROR;
 
-        //Log(LEVEL_ERROR, "Connecting SMB2 share failed, cause: %s", errorMsg);
+        logger::Log(logger::logLevel::Error, "Connecting SMB2 share failed, cause: {}", errorMsg);
     }
 
     if (loginErrorCode == SMBC_LOGIN_SUCCESS || loginErrorCode == SMBC_LOGIN_AUTHORITYERROR)
     {
         smbc->version = static_cast<SMBContext::SambaVersion>(smb2_get_dialect_version(smbc->smb2));
 
-        //Log(loginErrorCode == SMBC_LOGIN_SUCCESS ? LEVEL_INFO : LEVEL_ERROR,
-        //    "Create SMB2 session: smb%x://%s:%s@%s/%s, return %s",
-        //    version,
-        //    Encrypt(userID.c_str()).c_str(),
-        //    Encrypt(password.c_str()).c_str(),
-        //    server.c_str(), share.c_str(),
-        //    LoginErrorString[-(int)loginErrorCode]);
+        logger::Log(loginErrorCode == SMBC_LOGIN_SUCCESS ? logger::logLevel::Info : logger::logLevel::Error,
+            "Create SMB2 session: smb-v{:x}://{}:{}@{}/{}, return {}",
+            static_cast<int>(smbc->version),
+            smbc->userID,
+            smbc->password,
+            smbc->server,
+            smbc->share,
+            static_cast<int>(loginErrorCode));
         return loginErrorCode;
     }
     else if (loginErrorCode == SMBC_LOGIN_PROTOCOLERROR || loginErrorCode == SMBC_LOGIN_CONNECTIONERROR || loginErrorCode == SMBC_LOGIN_UNKNOWNERROR)
     {
-        //Log(LEVEL_INFO, "Trying to connect %s with SMB1 protocol.", server.c_str());
+        logger::Log(logger::logLevel::Info, "Trying to connect {} with SMB1 protocol.", smbc->server);
         loginErrorCode = SMBC_LOGIN_SUCCESS;
         unsigned int addr = 0;
         struct addrinfo* p_info = nullptr;
@@ -287,24 +326,26 @@ connect:
 
         if (smb_session_is_guest(smbc->session) == 1)
         {
-            //Log(LEVEL_INFO, "Logged in with Guest");
+            logger::Log(logger::logLevel::Info, "Logged in with Guest");
         }
 
-        //Log(LEVEL_INFO,
-        //"Connecting SMB1 server SUCCESS: smb1://%s:%s@%s/%s",
-        //    Encrypt(userID.c_str()).c_str(),
-        //    Encrypt(password.c_str()).c_str(),
-        //    server.c_str(), share.c_str());
-        //    version = SMB1;
-        //    return loginErrorCode;
+        logger::Log(logger::logLevel::Info,
+            "Connecting SMB1 server SUCCESS: smb1://{}:{}@{}/{}",
+            smbc->userID,
+            smbc->password,
+            smbc->server,
+            smbc->share);
+        smbc->version = SMBContext::SambaVersion::SMB1;
+        return loginErrorCode;
     }
 
 error:
-    //Log(LEVEL_ERROR, "Connecting SMB server failed: smb://%s:%s@%s/%s, return %s",
-    //Encrypt(userID.c_str()).c_str(),
-    //    Encrypt(password.c_str()).c_str(),
-    //    server.c_str(), share.c_str(),
-    //    LoginErrorString[-(int)loginErrorCode]);
+    logger::Log(logger::logLevel::Error, "Connecting SMB server failed: smb://{}:{}@{}/{}, return {}",
+        smbc->userID,
+        smbc->password,
+        smbc->server,
+        smbc->share,
+        static_cast<int>(loginErrorCode));
     return loginErrorCode;
 }
 //
@@ -342,17 +383,19 @@ error:
 //
 void* smbc_opendir(Context* ctx)
 {
+    using enum SMBContext::SambaVersion;
+
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {
-    case SMBContext::SMB1:
+    case SMB1:
         return smb_find(smbc->session, smbc->tid, (smbc->path + "\\*").data());
-    case SMBContext::SMB2_02:
-    case SMBContext::SMB2_10:
-    case SMBContext::SMB3_00:
-    case SMBContext::SMB3_02:
-    case SMBContext::SMB3_11:
+    case SMB2_02:
+    case SMB2_10:
+    case SMB3_00:
+    case SMB3_02:
+    case SMB3_11:
         return smb2_opendir(smbc->smb2, smbc->path.data());
     default:
         return nullptr;
@@ -361,17 +404,19 @@ void* smbc_opendir(Context* ctx)
 
 void* smbc_readdir(Context* ctx, void*& dir)
 {
+    using enum SMBContext::SambaVersion;
+
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {
-    case SMBContext::SMB1:
+    case SMB1:
         return smb_stat_list_read((smb_stat_list*)&dir);
-    case SMBContext::SMB2_02:
-    case SMBContext::SMB2_10:
-    case SMBContext::SMB3_00:
-    case SMBContext::SMB3_02:
-    case SMBContext::SMB3_11:
+    case SMB2_02:
+    case SMB2_10:
+    case SMB3_00:
+    case SMB3_02:
+    case SMB3_11:
         return smb2_readdir(smbc->smb2, (smb2dir*)dir);
     default:
         return nullptr;
@@ -380,11 +425,13 @@ void* smbc_readdir(Context* ctx, void*& dir)
 
 void smbc_resolve_file_stat(Context* ctx, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
 {
+    using enum SMBContext::SambaVersion;
+
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {
-    case SMBContext::SMB1:
+    case SMB1:
     {
         smb_stat st = (smb_stat)ent;
         name = smb_stat_name(st);
@@ -393,11 +440,11 @@ void smbc_resolve_file_stat(Context* ctx, void* ent, std::string& name, uint64_t
         isDir = smb_stat_get(st, SMB_STAT_ISDIR);
     }
     break;
-    case SMBContext::SMB2_02:
-    case SMBContext::SMB2_10:
-    case SMBContext::SMB3_00:
-    case SMBContext::SMB3_02:
-    case SMBContext::SMB3_11:
+    case SMB2_02:
+    case SMB2_10:
+    case SMB3_00:
+    case SMB3_02:
+    case SMB3_11:
     {
         smb2_stat_64 st = ((smb2dirent*)ent)->st;
         name = ((smb2dirent*)ent)->name;
@@ -413,18 +460,20 @@ void smbc_resolve_file_stat(Context* ctx, void* ent, std::string& name, uint64_t
 
 void smbc_closedir(Context* ctx, void* files)
 {
+    using enum SMBContext::SambaVersion;
+
     std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {
-    case SMBContext::SMB1:
+    case SMB1:
         smb_stat_list_destroy((smb_stat_list)files);
         break;
-    case SMBContext::SMB2_02:
-    case SMBContext::SMB2_10:
-    case SMBContext::SMB3_00:
-    case SMBContext::SMB3_02:
-    case SMBContext::SMB3_11:
+    case SMB2_02:
+    case SMB2_10:
+    case SMB3_00:
+    case SMB3_02:
+    case SMB3_11:
         smb2_closedir(smbc->smb2, (smb2dir*)files);
         break;
     default:

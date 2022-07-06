@@ -9,6 +9,7 @@
 #include "upnptools.h"
 
 #include "protocol.h"
+#include "../logger.h"
 
 
 #if _WIN64
@@ -75,13 +76,13 @@ volatile bool isDLNAModuleRunning = false;
 std::mutex UpnpDeviceMapMutex;
 std::map<std::string, UpnpDevice> UpnpDeviceMap;
 
-std::mutex logMutex;
+//std::mutex logMutex;
 //
 //static const char* LOGTAG[] = { "[I]","[W]","[E]" };
 //enum LogTag {
-//    LEVEL_INFO,
-//    LEVEL_WARNING,
-//    LEVEL_ERROR
+//    logger::logLevel::Info,
+//    logger::logLevel::Warning,
+//    logger::logLevel::Error
 //};
 //static void Log(LogTag tag, const char* format, ...)
 //{
@@ -479,7 +480,7 @@ static void ParseNewServer(IXML_Document* doc, const char* location)
             {
                 UpnpDeviceMap.emplace(std::piecewise_construct, std::forward_as_tuple(udn),
                     std::forward_as_tuple(udn, friendlyName, location, iconUrl, manufacturerString));
-                //Log(LEVEL_INFO, "Device found: DeviceType=%s, UDN=%s, Name=%s", deviceType, udn, friendlyName);
+                logger::Log(logger::logLevel::Info, "Device found: DeviceType={}, UDN={}, Name={}", deviceType, udn, friendlyName);
             }
         }
 
@@ -505,7 +506,7 @@ static void ParseNewServer(IXML_Document* doc, const char* location)
             }
 
             /* Try to browse content directory. */
-            //Log(LEVEL_INFO, "%s support service:%s, BaseURL=%s, ControlURL=%s", friendlyName, serviceType, baseURL, controlURL);
+            logger::Log(logger::logLevel::Info, "{} support service:{}, BaseURL={}, ControlURL={}", friendlyName, serviceType, baseURL, controlURL);
             std::lock_guard<std::mutex> lock(UpnpDeviceMapMutex);
             auto itr = UpnpDeviceMap.find(udn);
             if (itr != UpnpDeviceMap.end())
@@ -518,12 +519,12 @@ static void ParseNewServer(IXML_Document* doc, const char* location)
             int ret = UpnpResolveURL(baseURL, controlURL, url);
             if (ret == UPNP_E_SUCCESS)
             {
-                //Log(LEVEL_INFO, "UpnpResolveURL success, add device %s", friendlyName);
+                logger::Log(logger::logLevel::Info, "UpnpResolveURL success, add device {}", friendlyName);
                 itr->second.location = url;
                 //std::lock_guard<std::mutex> deviceQueueLock(deviceQueueMutex);
                 //queueAddDeviceInfo.emplace(std::make_shared<UpnpDevice>(itr->second));
             }
-            else //Log(LEVEL_ERROR, "UpnpResolveURL return %d, error: %d", ret, errno);
+            else logger::Log(logger::logLevel::Error, "UpnpResolveURL return {}, error: {}", ret, errno);
             free(url);
         }
         ixmlNodeList_free(serviceList);
@@ -605,7 +606,7 @@ static char8_t* GetBestAdapterInterfaceName()
         &adapts_size);
     if (ret != ERROR_BUFFER_OVERFLOW)
     {
-        //Log(LEVEL_ERROR, "GetAdaptersAddresses failed to find list of adapters");
+        logger::Log(logger::logLevel::Error, "GetAdaptersAddresses failed to find list of adapters");
         return NULL;
     }
 
@@ -618,7 +619,7 @@ static char8_t* GetBestAdapterInterfaceName()
         &adapts_size);
     if (ret != 0)
     {
-        //Log(LEVEL_ERROR, "GetAdaptersAddresses failed to find list of adapters");
+        logger::Log(logger::logLevel::Error, "GetAdaptersAddresses failed to find list of adapters");
         return NULL;
     }
 
@@ -691,7 +692,7 @@ done:
         char8_t* tmpIfName = (char8_t*)calloc(LINE_SIZE, sizeof(char8_t));
         int ret = WideCharToMultiByte(CP_UTF8, 0, bestAdapter->FriendlyName, -1, NULL, 0, NULL, NULL);
         ret = WideCharToMultiByte(CP_UTF8, 0, bestAdapter->FriendlyName, ret, reinterpret_cast<char*>(tmpIfName), ret, NULL, NULL);
-        //Log(LEVEL_INFO, "Get the best ip is %s, ifname is %s", tmpIp, reinterpret_cast<char*>(tmpIfName));
+        logger::Log(logger::logLevel::Info, "Get the best ip is {}, ifname is {}", tmpIp, reinterpret_cast<char*>(tmpIfName));
         free(adapts);
         return tmpIfName;
     }
@@ -711,20 +712,20 @@ static int dlna_init()
 #endif
     if (res != UPNP_E_SUCCESS)
     {
-        //Log(LEVEL_ERROR, "Upnp SDK Init error %s", UpnpGetErrorMessage(res));
+        logger::Log(logger::logLevel::Error, "Upnp SDK Init error {}", UpnpGetErrorMessage(res));
         return res;
     }
-    //Log(LEVEL_INFO, "Upnp SDK init success");
+    logger::Log(logger::logLevel::Info, "Upnp SDK init success");
     ixmlRelaxParser(1);
 
     /* Register a control point */
     res = UpnpRegisterClient(UpnpRegisterClientCallback, nullptr, &handle);
     if (res != UPNP_E_SUCCESS)
     {
-        //Log(LEVEL_ERROR, "Upnp control point register failed, return %s", UpnpGetErrorMessage(res));
+        logger::Log(logger::logLevel::Error, "Upnp control point register failed, return {}", UpnpGetErrorMessage(res));
         return res;
     }
-    //Log(LEVEL_INFO, "Upnp control point register success, handle is %d", handle);
+    logger::Log(logger::logLevel::Info, "Upnp control point register success, handle is {}", handle);
     UpnpSetMaxContentLength(INT_MAX);
     isDLNAModuleRunning = true;
     return res;
@@ -735,17 +736,17 @@ static int dlna_finish()
     int res = UpnpUnRegisterClient(handle);
     if (res != UPNP_E_SUCCESS)
     {
-        //Log(LEVEL_ERROR, "Upnp control point unregister failed, return %s", UpnpGetErrorMessage(res));
+        logger::Log(logger::logLevel::Error, "Upnp control point unregister failed, return {}", UpnpGetErrorMessage(res));
         return res;
     }
 
     res = UpnpFinish();
     if (res != UPNP_E_SUCCESS)
     {
-        //Log(LEVEL_ERROR, "Upnp SDK finished failed");
+        logger::Log(logger::logLevel::Error, "Upnp SDK finished failed");
         return res;
     }
-    //Log(LEVEL_INFO, "Upnp SDK finished success");
+    logger::Log(logger::logLevel::Info, "Upnp SDK finished success");
     isDLNAModuleRunning = false;
     return res;
 }
@@ -756,10 +757,10 @@ static int dlna_discover(Context* ctx)
     int res = UpnpSearchAsync(handle, MAX_SEARCH_TIME, MEDIA_SERVER_DEVICE_TYPE, nullptr);
     if (res != UPNP_E_SUCCESS)
     {
-        //Log(LEVEL_ERROR, "Searching server failed");
+        logger::Log(logger::logLevel::Error, "Searching server failed");
         return res;
     }
-    //Log(LEVEL_INFO, "Searching server success");
+    logger::Log(logger::logLevel::Info, "Searching server success");
     return res;
 }
 
@@ -928,7 +929,7 @@ static std::string BrowseAction(const char* objectID,
 
     if (res || !browseResultXMLDocument)
     {
-        //Log(LEVEL_ERROR, "UpnpSendAction return %s", UpnpGetErrorMessage(res));
+        logger::Log(logger::logLevel::Error, "UpnpSendAction return {}", UpnpGetErrorMessage(res));
         goto browseActionCleanup;
     }
     browseResultString = ConvertXMLtoString(rawXML = ixmlPrintDocument(browseResultXMLDocument));
@@ -938,7 +939,7 @@ static std::string BrowseAction(const char* objectID,
     browseResultXMLDocument = ixmlParseBuffer(browseResultString.data());
     if (browseResultXMLDocument == nullptr)
     {
-        //Log(LEVEL_ERROR, "Parse result to XML format failed");
+        logger::Log(logger::logLevel::Error, "Parse result to XML format failed");
         goto browseActionCleanup;
     }
     browseResultString = ixmlPrintDocument(browseResultXMLDocument);

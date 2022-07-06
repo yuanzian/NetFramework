@@ -30,6 +30,7 @@ target_include_directories(test_browse PRIVATE
 
 add_executable(test_log)
 target_sources(test_log PRIVATE
+    "${CMAKE_SOURCE_DIR}/source/logger.cpp"
     "test_log.cpp"
 )
 #target_link_libraries(test_log NetworkModule)

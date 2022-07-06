@@ -4,6 +4,8 @@
 
 #include "source/NetworkModule.h"
 #include "source/protocol/protocol_smb.h"
+#include "source/logger.h"
+
 
 using namespace NetworkModule;
 
@@ -18,6 +20,14 @@ int main()
     //    .priority = Context::Priority::S
     //};
 
+#if _WIN32
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(1, 1), &wsaData);
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+    //std::cout << std::boolalpha << logger::SetLogFile(R"(./test.log)") << std::endl;
+    //std::cout << std::boolalpha << logger::OpenFile() << std::endl;
+
     Context ctx
     {
         .proto = FindProtocol("smb"),
@@ -25,7 +35,7 @@ int main()
         .priority = Context::Priority::S
     };
 
-
+    std::cout << GetBrowseRunner()->IsInitialized() << '\n';
     GetBrowseRunner()->CreateTask(&ctx, "");
 
     GetBrowseRunner()->AddToConsumer(&ctx, "");
@@ -34,6 +44,9 @@ int main()
     std::this_thread::sleep_for(7s);
 
     system("pause");
+#if _WIN32
+    WSACleanup();
+#endif
     //runner<std::function<int(std::unique_ptr<int>, Context*)>, std::unique_ptr<int>, Context*> test{
     //    [](std::unique_ptr<int> a,Context* b) {return 0; }
     //};
