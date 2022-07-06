@@ -11,15 +11,6 @@ using namespace NetworkModule;
 
 int main()
 {
-    //Test();
-    //std::string uuid = "test", objid = "0", location = "1.com";
-    //Context ctx
-    //{
-    //    .proto = FindProtocol("dlna"),
-    //    .priv_data = std::make_shared<DLNAContext>(uuid, objid, location),
-    //    .priority = Context::Priority::S
-    //};
-
 #if _WIN32
     WSADATA wsaData;
     WSAStartup(MAKEWORD(1, 1), &wsaData);
@@ -27,6 +18,14 @@ int main()
 #endif
     //std::cout << std::boolalpha << logger::SetLogFile(R"(./test.log)") << std::endl;
     //std::cout << std::boolalpha << logger::OpenFile() << std::endl;
+
+    //std::string uuid = "test", objid = "0", location = "1.com";
+    //Context ctx
+    //{
+    //    .proto = FindProtocol("dlna"),
+    //    .priv_data = std::make_shared<DLNAContext>(uuid, objid, location),
+    //    .priority = Context::Priority::S
+    //};
 
     Context ctx
     {
@@ -47,9 +46,4 @@ int main()
     system("pause");
     WSACleanup();
 #endif
-    //runner<std::function<int(std::unique_ptr<int>, Context*)>, std::unique_ptr<int>, Context*> test{
-    //    [](std::unique_ptr<int> a,Context* b) {return 0; }
-    //};
-    //test.CreateTask(std::make_unique<int>(2), &ctx);
-
 }
