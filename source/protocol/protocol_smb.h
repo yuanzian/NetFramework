@@ -43,7 +43,6 @@ struct SMBContext
     }version;
 };
 
-
 static int smb_discover(Context* ctx);
 static int smb_browse(Context* ctx);
 

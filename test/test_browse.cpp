@@ -35,7 +35,7 @@ int main()
         .priority = Context::Priority::S
     };
 
-    std::cout << GetBrowseRunner()->IsInitialized() << '\n';
+    std::cout << std::boolalpha << GetBrowseRunner()->IsInitialized() << '\n';
     GetBrowseRunner()->CreateTask(&ctx, "");
 
     GetBrowseRunner()->AddToConsumer(&ctx, "");
@@ -43,8 +43,8 @@ int main()
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(7s);
 
-    system("pause");
 #if _WIN32
+    system("pause");
     WSACleanup();
 #endif
     //runner<std::function<int(std::unique_ptr<int>, Context*)>, std::unique_ptr<int>, Context*> test{

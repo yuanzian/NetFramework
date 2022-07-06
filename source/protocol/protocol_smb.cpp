@@ -61,14 +61,31 @@ extern const Protocol smb_protocol =
 
 static int smb_discover(Context* ctx)
 {
-    return 0;
+    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
+    netbios_ns* ns = netbios_ns_new();
+
+    const netbios_ns_discover_callbacks callback
+    {
+        .p_opaque = (void*)0x42,
+        .pf_on_entry_added = [](void* p_opaque, netbios_ns_entry* entry)
+        {
+            logger::Log(logger::logLevel::Info, "Add device {}:{}", netbios_ns_entry_name(entry), netbios_ns_entry_ip_char(entry));
+            //std::scoped_lock<std::mutex> lock(deviceQueueMutex);
+            //queueAddDeviceInfo.emplace(netbios_ns_entry_ip_char(entry), netbios_ns_entry_name(entry));
+        },
+        .pf_on_entry_removed = [](void* p_opaque, netbios_ns_entry* entry)
+        {
+            logger::Log(logger::logLevel::Info, "Remove device {}:{}", netbios_ns_entry_name(entry), netbios_ns_entry_ip_char(entry));
+            //std::scoped_lock<std::mutex> lock(deviceQueueMutex);
+            //queueRemoveDeviceInfo.emplace(netbios_ns_entry_ip_char(entry), netbios_ns_entry_name(entry));
+        },
+    };
+
+    return (netbios_ns_discover_start(ns, 6, const_cast<netbios_ns_discover_callbacks*>(&callback)) == 0);
 }
 
 static int smb_browse(Context* ctx)
 {
-    std::cout << "start smb_browse\n";
-    logger::Log(logger::logLevel::Trace, "start smb_browse");
-
     std::vector<std::tuple<std::string, uint64_t, uint64_t>> vectorVideoProperty;
     std::vector<std::string> vectorSubtitleProperty;
     std::vector<std::string> vectorPictureProperty;

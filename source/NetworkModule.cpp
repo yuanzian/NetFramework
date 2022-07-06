@@ -3,7 +3,6 @@
 
 namespace NetworkModule
 {
-    std::unique_ptr<int> a;
     runner<std::function<int(Context*, std::string)>, Context*, std::string>
         BrowseRunner(
             [](Context* ctx, std::string path)
@@ -18,6 +17,11 @@ namespace NetworkModule
             return ctx->proto.discover(ctx);
         }
     );
+
+    extern "C" runner<std::function<int(Context*)>, Context*> *GetSearchRunner()
+    {
+        return &SearchRunner;
+    }
 
     extern "C" runner<std::function<int(Context*, std::string)>, Context*, std::string> *GetBrowseRunner()
     {

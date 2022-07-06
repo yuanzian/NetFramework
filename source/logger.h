@@ -5,6 +5,7 @@
 #include <source_location>
 
 namespace logger {
+
     extern const std::filesystem::path logFile;
     extern std::ofstream logStream;
 
