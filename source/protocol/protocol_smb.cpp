@@ -1,4 +1,3 @@
-#include <cstring>
 #include <fstream>
 #include <future>
 
@@ -18,38 +17,35 @@
 #include "rules.h"
 #include "source/logger.h"
 
-inline std::string Encrypt(const char* src)
+using namespace std::chrono_literals;
+#define SMB1_CONNECTION_TIMEOUT 7s
+#define SMB2_CONNECTION_TIMEOUT (3s).count()
+#define DESTROY_CONTEXT_DELAY_TIME (30s).count()
+
+SMBContext::SMBContext()
+    : session(nullptr)
+    , tid(0)
+    , smb2(nullptr)
+    , tmSessionConLastUse(0)
+    , delayDeconstruct(0)
+    , version(SambaVersion::SMB_UNDEFINED)
+{}
+
+SMBContext::~SMBContext()
 {
-    int length = strlen(src);
-    std::string dst(src, length);
-    if (length <= 2)
+    if (session)
     {
-        for (int i = 0; i < length; i++)
-        {
-            dst[i] = '*';
-        }
+        if (tid != 0)
+            smb_tree_disconnect(session, tid);
+        smb_session_destroy(session);
+        session = nullptr;
     }
-    else if (length <= 5)
+    if (smb2)
     {
-        dst[0] = src[0];
-        for (int i = 1; i < length - 1; i++)
-        {
-            dst[i] = '*';
-        }
-        dst[length - 1] = src[length - 1];
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        smb2 = nullptr;
     }
-    else
-    {
-        dst[0] = src[0];
-        dst[1] = src[1];
-        for (int i = 2; i < length - 2; i++)
-        {
-            dst[i] = '*';
-        }
-        dst[length - 2] = src[length - 2];
-        dst[length - 1] = src[length - 1];
-    }
-    return dst;
 }
 
 extern const Protocol smb_protocol =
@@ -146,22 +142,22 @@ static int smb_browse(Context* ctx)
         }
     }
 
-    //if (!vectorVideoProperty.empty() && !vectorPictureProperty.empty())
-    //{
-    //    for (const auto& [video, cTime, size] : vectorVideoProperty)
-    //    {
-    //        std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
-    //        for (const std::string& picture : vectorPictureProperty)
-    //        {
-    //            std::string pictureWithoutSuffix = picture.substr(0, picture.find_last_of('.'));
-    //            if (videoWithoutSuffix == pictureWithoutSuffix)
-    //            {
-    //                mapThumbnailProperty.emplace(video, picture);
-    //                break;
-    //            }
-    //        }
-    //    }
-    //}
+    if (!vectorVideoProperty.empty() && !vectorPictureProperty.empty())
+    {
+        for (const auto& [video, cTime, size] : vectorVideoProperty)
+        {
+            std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
+            for (const std::string& picture : vectorPictureProperty)
+            {
+                std::string pictureWithoutSuffix = picture.substr(0, picture.find_last_of('.'));
+                if (videoWithoutSuffix == pictureWithoutSuffix)
+                {
+                    mapThumbnailProperty.emplace(video, picture);
+                    break;
+                }
+            }
+        }
+    }
 
     for (const auto& [video, cTime, size] : vectorVideoProperty)
     {
@@ -186,39 +182,6 @@ static int smb_browse(Context* ctx)
     logger::Log(logger::logLevel::Trace, "{}", xt.str());
     return 0;
 }
-
-
-using namespace std::chrono_literals;
-#define SMB1_CONNECTION_TIMEOUT 7s
-#define SMB2_CONNECTION_TIMEOUT (3s).count()
-#define DESTROY_CONTEXT_DELAY_TIME (30s).count()
-//
-//SMBContext()
-//    : session(nullptr)
-//    , tid(0)
-//    , smb2(nullptr)
-//    , tmSessionConLastUse(0)
-//    , delayDeconstruct(0)
-//    , version(SMB_UNDEFINED)
-//{}
-//
-//~SMBContext()
-//{
-//    if (session)
-//    {
-//        if (tid != 0)
-//            smb_tree_disconnect(session, tid);
-//        smb_session_destroy(session);
-//        session = nullptr;
-//    }
-//    if (smb2)
-//    {
-//        smb2_disconnect_share(smb2);
-//        smb2_destroy_context(smb2);
-//        smb2 = nullptr;
-//    }
-//}
-
 
 LoginError smbc_connect_share(Context* ctx)
 {
