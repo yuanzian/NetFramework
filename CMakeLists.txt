@@ -49,8 +49,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     "source/logger.cpp"
 )
 
-target_link_libraries(${PROJECT_NAME} UPNP::Static)
-target_link_libraries(${PROJECT_NAME} dsm smb2)
+#target_link_libraries(${PROJECT_NAME} UPNP::Static)
+target_link_libraries(${PROJECT_NAME} dsm smb2 UPNP::Static )
 target_compile_definitions (${PROJECT_NAME}
     PUBLIC $<IF:$<CONFIG:Debug>,DEBUG,NDEBUG>
     PUBLIC $<$<BOOL:${MSVC}>:UPNP_USE_MSVCPP>
