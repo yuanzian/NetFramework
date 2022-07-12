@@ -22,15 +22,6 @@ using namespace std::chrono_literals;
 #define SMB2_CONNECTION_TIMEOUT (3s).count()
 #define DESTROY_CONTEXT_DELAY_TIME (30s).count()
 
-SMBContext::SMBContext()
-    : session(nullptr)
-    , tid(0)
-    , smb2(nullptr)
-    , tmSessionConLastUse(0)
-    , delayDeconstruct(0)
-    , version(SambaVersion::SMB_UNDEFINED)
-{}
-
 SMBContext::~SMBContext()
 {
     if (session)

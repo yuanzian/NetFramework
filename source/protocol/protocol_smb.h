@@ -42,13 +42,7 @@ struct SMBContext
         SMB3_11 = 0x0311
     }version;
 
-    SMBContext();
     ~SMBContext();
-
-    SMBContext operator=(const SMBContext&) = delete;
-    SMBContext(const SMBContext&) = delete;
-
-    SMBContext(SMBContext&&) = delete;
 };
 
 static int smb_discover(Context* ctx);

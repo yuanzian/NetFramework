@@ -27,6 +27,16 @@ namespace DLNA {
 }
 
 
+struct DLNAContext
+{
+    std::string uuid;
+    std::string objid;
+    std::string friendlyName;
+    std::string manufacturer;
+    std::string location;
+};
+
+
 struct UpnpDevice
 {
     std::string UDN;
@@ -587,6 +597,94 @@ static int UpnpRegisterClientCallback(Upnp_EventType eventType, const void* even
     return UPNP_E_SUCCESS;
 }
 
+static std::string BrowseAction(const char* objectID,
+    const char* flag,
+    const char* filter,
+    const char* startingIndex,
+    const char* requestCount,
+    const char* sortCriteria,
+    const char* controlUrl)
+{
+    IXML_Document* actionDoc = nullptr;
+    IXML_Document* browseResultXMLDocument = nullptr;
+    char* rawXML = nullptr;
+    std::string browseResultString;
+
+    int res = UpnpAddToAction(&actionDoc, "Browse",
+        CONTENT_DIRECTORY_SERVICE_TYPE, "ObjectID", objectID);
+
+    if (res != UPNP_E_SUCCESS)
+    {
+        goto browseActionCleanup;
+    }
+
+    res = UpnpAddToAction(&actionDoc, "Browse",
+        CONTENT_DIRECTORY_SERVICE_TYPE, "BrowseFlag", flag);
+
+    if (res != UPNP_E_SUCCESS)
+    {
+        goto browseActionCleanup;
+    }
+
+    res = UpnpAddToAction(&actionDoc, "Browse",
+        CONTENT_DIRECTORY_SERVICE_TYPE, "Filter", filter);
+
+    if (res != UPNP_E_SUCCESS)
+    {
+        goto browseActionCleanup;
+    }
+
+    res = UpnpAddToAction(&actionDoc, "Browse",
+        CONTENT_DIRECTORY_SERVICE_TYPE, "StartingIndex", startingIndex);
+    if (res != UPNP_E_SUCCESS)
+    {
+        goto browseActionCleanup;
+    }
+
+    res = UpnpAddToAction(&actionDoc, "Browse",
+        CONTENT_DIRECTORY_SERVICE_TYPE, "RequestedCount", requestCount);
+
+    if (res != UPNP_E_SUCCESS)
+    {
+        goto browseActionCleanup;
+    }
+
+    res = UpnpAddToAction(&actionDoc, "Browse",
+        CONTENT_DIRECTORY_SERVICE_TYPE, "SortCriteria", sortCriteria);
+
+    if (res != UPNP_E_SUCCESS)
+    {
+        goto browseActionCleanup;
+    }
+
+    res = UpnpSendAction(handle,
+        controlUrl,
+        CONTENT_DIRECTORY_SERVICE_TYPE,
+        nullptr, /* ignored in SDK, must be NULL */
+        actionDoc,
+        &browseResultXMLDocument);
+
+    if (res || !browseResultXMLDocument)
+    {
+        logger::Log(logger::logLevel::Error, "UpnpSendAction return {}", UpnpGetErrorMessage(res));
+        goto browseActionCleanup;
+    }
+
+    rawXML = ixmlDocumenttoString(browseResultXMLDocument);
+    if (rawXML != nullptr)
+    {
+        browseResultString = rawXML;
+        ixmlFreeDOMString(rawXML);
+    }
+
+browseActionCleanup:
+    if (browseResultXMLDocument)
+        ixmlDocument_free(browseResultXMLDocument);
+
+    ixmlDocument_free(actionDoc);
+    return browseResultString;
+}
+
 #if _WIN64
 static char8_t* GetBestAdapterInterfaceName()
 {
@@ -766,199 +864,44 @@ static int dlna_discover(Context* ctx)
 
 static int dlna_browse(Context* ctx)
 {
+    std::shared_ptr<DLNAContext> dlnac = std::static_pointer_cast<DLNAContext>(ctx->priv_data);
+
+    std::string res = BrowseAction(dlnac->objid.c_str(), "BrowseDirectChildren", "*", "0", "10000", "", dlnac->location.data());
+
+    res = std::regex_replace(res, std::regex{ "&amp;" }, "&");
+    res = std::regex_replace(res, std::regex{ "&quot;" }, "\"");
+    res = std::regex_replace(res, std::regex{ "&gt;" }, ">");
+    res = std::regex_replace(res, std::regex{ "&lt;" }, "<");
+    res = std::regex_replace(res, std::regex{ "&apos;" }, "'");
+    res = std::regex_replace(res, std::regex{ "<unknown>" }, "unknown");
+
+    if (dlnac->manufacturer != "Microsoft Corporation")
+    {
+        res = std::regex_replace(res, std::regex{ R"((pv:subtitleFileType=")([^"]*)(")|(pv:subtitleFileUri=")([^"]*)("))" }, "");
+        res = std::regex_replace(res, std::regex{ "\xc3\x97" }, "x");
+    }
+
+    IXML_Document* parseDoc = ixmlParseBuffer(res.data());
+    if (parseDoc == nullptr)
+    {
+        logger::Log(logger::logLevel::Error, "Parse result to XML format failed");
+        res.clear();
+    }
+    else
+    {
+        char* tmp = ixmlDocumenttoString(parseDoc);
+        res = tmp;
+        ixmlFreeDOMString(tmp);
+    }
+
+    if (res.empty())
+        logger::Log(logger::logLevel::Error, "Browse failed");
+    else
+        logger::Log(logger::logLevel::Info, "{}", res);
     return 0;
 }
 
-static std::string ReplaceAll(const char* src, int srcLen, const char* oldValue, const char* newValue)
-{
-    int lenSrc = srcLen;
-    int lenSrcOldValue = strlen(oldValue);
-    int lenSrcTarValue = strlen(newValue);
-    int maxOldValueCount = lenSrc / lenSrcOldValue;
-    const char** posAllOldValue = new const char* [maxOldValueCount];
-    int findCount = 0;
-    const char* pCur = strstr(src, oldValue);
-    while (pCur)
-    {
-        posAllOldValue[findCount] = pCur;
-        findCount++;
-        pCur += strlen(oldValue);
-        pCur = strstr(pCur, oldValue);
-    }
 
-    char* newChar = new char[srcLen + (lenSrcTarValue - lenSrcOldValue) * findCount];
-    const char* pSrcCur = src;
-    char* pTarCur = newChar;
-    for (int iIndex = 0; iIndex < findCount; ++iIndex)
-    {
-        int cpyLen = posAllOldValue[iIndex] - pSrcCur;
-        memcpy(pTarCur, pSrcCur, cpyLen);
-        pTarCur += cpyLen;
-        memcpy(pTarCur, newValue, lenSrcTarValue);
-        pSrcCur = posAllOldValue[iIndex] + lenSrcOldValue;
-        pTarCur += lenSrcTarValue;
-    }
-
-    int cpyLen = src + srcLen - pSrcCur;
-    memcpy(pTarCur, pSrcCur, cpyLen);
-    pTarCur += cpyLen;
-
-    std::string ret(newChar, srcLen + (lenSrcTarValue - lenSrcOldValue) * findCount);
-    delete[] newChar;
-
-    return ret;
-}
-
-static std::string ConvertXMLtoString(const char* src)
-{
-    int strLen = strlen(src);
-    std::string srcstr(src, strLen);
-
-    int lengthBefore = 0;
-    do
-    {
-        lengthBefore = srcstr.length();
-        srcstr = ReplaceAll(srcstr.data(), srcstr.length(), "\xc3\x97", "x");
-    } while (lengthBefore != srcstr.length());
-
-    do
-    {
-        lengthBefore = srcstr.length();
-        srcstr = ReplaceAll(srcstr.data(), srcstr.length(), "&amp;", "&");
-    } while (lengthBefore != srcstr.length());
-
-    do
-    {
-        lengthBefore = srcstr.length();
-        srcstr = ReplaceAll(srcstr.data(), srcstr.length(), "&quot;", "\"");
-    } while (lengthBefore != srcstr.length());
-
-    do
-    {
-        lengthBefore = srcstr.length();
-        srcstr = ReplaceAll(srcstr.data(), srcstr.length(), "&gt;", ">");
-    } while (lengthBefore != srcstr.length());
-
-    do
-    {
-        lengthBefore = srcstr.length();
-        srcstr = ReplaceAll(srcstr.data(), srcstr.length(), "&lt;", "<");
-    } while (lengthBefore != srcstr.length());
-
-    do
-    {
-        lengthBefore = srcstr.length();
-        srcstr = ReplaceAll(srcstr.data(), srcstr.length(), "&apos;", "'");
-    } while (lengthBefore != srcstr.length());
-
-    do
-    {
-        lengthBefore = srcstr.length();
-        srcstr = ReplaceAll(srcstr.data(), srcstr.length(), "<unknown>", "unknown");
-    } while (lengthBefore != srcstr.length());
-
-    return srcstr;
-}
-
-static std::string BrowseAction(const char* objectID,
-    const char* flag,
-    const char* filter,
-    const char* startingIndex,
-    const char* requestCount,
-    const char* sortCriteria,
-    const char* controlUrl)
-{
-    IXML_Document* actionDoc = nullptr;
-    IXML_Document* browseResultXMLDocument = nullptr;
-    char* rawXML = nullptr;
-    std::string browseResultString;
-
-    int res = UpnpAddToAction(&actionDoc, "Browse",
-        CONTENT_DIRECTORY_SERVICE_TYPE, "ObjectID", objectID);
-
-    if (res != UPNP_E_SUCCESS)
-    {
-        goto browseActionCleanup;
-    }
-
-    res = UpnpAddToAction(&actionDoc, "Browse",
-        CONTENT_DIRECTORY_SERVICE_TYPE, "BrowseFlag", flag);
-
-    if (res != UPNP_E_SUCCESS)
-    {
-        goto browseActionCleanup;
-    }
-
-    res = UpnpAddToAction(&actionDoc, "Browse",
-        CONTENT_DIRECTORY_SERVICE_TYPE, "Filter", filter);
-
-    if (res != UPNP_E_SUCCESS)
-    {
-        goto browseActionCleanup;
-    }
-
-    res = UpnpAddToAction(&actionDoc, "Browse",
-        CONTENT_DIRECTORY_SERVICE_TYPE, "StartingIndex", startingIndex);
-    if (res != UPNP_E_SUCCESS)
-    {
-        goto browseActionCleanup;
-    }
-
-    res = UpnpAddToAction(&actionDoc, "Browse",
-        CONTENT_DIRECTORY_SERVICE_TYPE, "RequestedCount", requestCount);
-
-    if (res != UPNP_E_SUCCESS)
-    {
-        goto browseActionCleanup;
-    }
-
-    res = UpnpAddToAction(&actionDoc, "Browse",
-        CONTENT_DIRECTORY_SERVICE_TYPE, "SortCriteria", sortCriteria);
-
-    if (res != UPNP_E_SUCCESS)
-    {
-        goto browseActionCleanup;
-    }
-
-    res = UpnpSendAction(handle,
-        controlUrl,
-        CONTENT_DIRECTORY_SERVICE_TYPE,
-        nullptr, /* ignored in SDK, must be NULL */
-        actionDoc,
-        &browseResultXMLDocument);
-
-    if (res || !browseResultXMLDocument)
-    {
-        logger::Log(logger::logLevel::Error, "UpnpSendAction return {}", UpnpGetErrorMessage(res));
-        goto browseActionCleanup;
-    }
-    browseResultString = ConvertXMLtoString(rawXML = ixmlPrintDocument(browseResultXMLDocument));
-    ixmlFreeDOMString(rawXML);
-    ixmlDocument_free(browseResultXMLDocument);
-    browseResultString = std::regex_replace(browseResultString, std::regex{ R"((pv:subtitleFileType=")([^"]*)(")|(pv:subtitleFileUri=")([^"]*)("))" }, "");
-    browseResultXMLDocument = ixmlParseBuffer(browseResultString.data());
-    if (browseResultXMLDocument == nullptr)
-    {
-        logger::Log(logger::logLevel::Error, "Parse result to XML format failed");
-        goto browseActionCleanup;
-    }
-    browseResultString = ixmlPrintDocument(browseResultXMLDocument);
-    ixmlDocument_free(browseResultXMLDocument);
-    ixmlDocument_free(actionDoc);
-    return browseResultString;
-
-browseActionCleanup:
-    ixmlDocument_free(actionDoc);
-    return std::string();
-}
-
-struct DLNAContext
-{
-    std::string uuid;
-    std::string objid;
-    //std::string friendlyName;
-    std::string location;
-};
 
 extern const Protocol dlna_protocol =
 {
