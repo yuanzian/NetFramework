@@ -46,9 +46,9 @@ extern const Protocol smb_protocol =
     .browse = smb_browse
 };
 
-static int smb_discover(Context* ctx)
+static int smb_discover(std::shared_ptr<void> priv_data)
 {
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
+    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(priv_data);
     netbios_ns* ns = netbios_ns_new();
 
     const netbios_ns_discover_callbacks callback
@@ -71,8 +71,10 @@ static int smb_discover(Context* ctx)
     return (netbios_ns_discover_start(ns, 6, const_cast<netbios_ns_discover_callbacks*>(&callback)) == 0);
 }
 
-static int smb_browse(Context* ctx)
+static int smb_browse(std::shared_ptr<void> priv_data)
 {
+    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(priv_data);
+
     std::vector<std::tuple<std::string, uint64_t, uint64_t>> vectorVideoProperty;
     std::vector<std::string> vectorSubtitleProperty;
     std::vector<std::string> vectorPictureProperty;
@@ -84,15 +86,15 @@ static int smb_browse(Context* ctx)
     void* file = nullptr;
 
     xt << "<folderxml>";
-    int ret = smbc_connect_share(ctx);
-    files = smbc_opendir(ctx);
-    while ((file = smbc_readdir(ctx, files)) != nullptr)
+    int ret = smbc_connect_share(smbc);
+    files = smbc_opendir(smbc);
+    while ((file = smbc_readdir(smbc, files)) != nullptr)
     {
         std::string name;
         uint64_t cTime;
         uint64_t size;
         bool isDir;
-        smbc_resolve_file_stat(ctx, file, name, cTime, size, isDir);
+        smbc_resolve_file_stat(smbc, file, name, cTime, size, isDir);
 
         if (isDir)
         {
@@ -111,7 +113,7 @@ static int smb_browse(Context* ctx)
             vectorPictureProperty.emplace_back(name);
         }
     }
-    smbc_closedir(ctx, files);
+    smbc_closedir(smbc, files);
 
     if (!vectorVideoProperty.empty() && !vectorSubtitleProperty.empty())
     {
@@ -174,10 +176,8 @@ static int smb_browse(Context* ctx)
     return 0;
 }
 
-LoginError smbc_connect_share(Context* ctx)
+LoginError smbc_connect_share(std::shared_ptr<SMBContext> smbc)
 {
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
-
     LoginError loginErrorCode = SMBC_LOGIN_SUCCESS;
     logger::Log(logger::logLevel::Info, "Trying to connect {} with SMB2 protocol.", smbc->server);
     smbc->smb2 = smb2_init_context();
@@ -352,11 +352,9 @@ error:
 //    }
 //}
 //
-void* smbc_opendir(Context* ctx)
+void* smbc_opendir(std::shared_ptr<SMBContext> smbc)
 {
     using enum SMBContext::SambaVersion;
-
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {
@@ -373,11 +371,9 @@ void* smbc_opendir(Context* ctx)
     }
 }
 
-void* smbc_readdir(Context* ctx, void*& dir)
+void* smbc_readdir(std::shared_ptr<SMBContext> smbc, void*& dir)
 {
     using enum SMBContext::SambaVersion;
-
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {
@@ -394,11 +390,9 @@ void* smbc_readdir(Context* ctx, void*& dir)
     }
 }
 
-void smbc_resolve_file_stat(Context* ctx, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
+void smbc_resolve_file_stat(std::shared_ptr<SMBContext> smbc, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
 {
     using enum SMBContext::SambaVersion;
-
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {
@@ -429,11 +423,9 @@ void smbc_resolve_file_stat(Context* ctx, void* ent, std::string& name, uint64_t
     }
 }
 
-void smbc_closedir(Context* ctx, void* files)
+void smbc_closedir(std::shared_ptr<SMBContext> smbc, void* files)
 {
     using enum SMBContext::SambaVersion;
-
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(ctx->priv_data);
 
     switch (smbc->version)
     {

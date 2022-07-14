@@ -43,4 +43,4 @@ namespace logger {
 
     template <typename... Args>
     Log(logLevel, const char*, Args&&...)->Log<Args...>;
-};
+}

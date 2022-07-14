@@ -2,17 +2,16 @@
 #include <string>
 #include <map>
 #include <memory>
-
-struct Protocol;
-struct Context;
+#include <functional>
 
 struct Protocol
 {
     const std::string name;
-    int (*init)();
-    int (*finish)();
-    int (*discover)(Context* ctx);
-    int (*browse)(Context* ctx);
+
+    std::function<int()> init;
+    std::function<int()> finish;
+    std::function<int(std::shared_ptr<void>)> discover;
+    std::function<int(std::shared_ptr<void>)> browse;
 };
 
 struct Context
