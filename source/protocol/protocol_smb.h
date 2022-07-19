@@ -20,8 +20,28 @@ enum LoginError
     SMBC_LOGIN_PROTOCOLERROR = -6
 };
 
-struct SMBContext
+class SMBContext
 {
+public:
+    ~SMBContext();
+
+    LoginError smbc_connect_share();
+    void smbc_disconnect_share();
+    bool IsValid();
+    int smbc_get_shareList(smb_share_list& shareList);
+    const char* smbc_get_errorInfo();
+    void* smbc_opendir();
+    void* smbc_readdir(void*& dir);
+    void smbc_resolve_file_stat(void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir);
+    void smbc_closedir(void* files);
+    void* smbc_open(const char* file, int flag);
+    int64_t smbc_seek(void* fh, int64_t offset, int whence);
+    int64_t smbc_get_file_size(void* fh);
+    int smbc_get_max_read_size();
+    int smbc_read(void* fh, uint8_t* buf, uint32_t len);
+    void smbc_close(void* fh);
+
+
     std::string server;
     std::string share;
     std::string path;
@@ -43,7 +63,6 @@ struct SMBContext
         SMB3_11 = 0x0311
     }version;
 
-    ~SMBContext();
 };
 
 static int smb_init();
@@ -51,19 +70,3 @@ static int smb_finish();
 
 static int smb_discover(std::shared_ptr<void> ctx);
 static int smb_browse(std::shared_ptr<void> ctx);
-
-LoginError smbc_connect_share(SMBContext& smbc);
-void smbc_disconnect_share(SMBContext& smbc);
-bool IsValid();
-int smbc_get_shareList(SMBContext& smbc, smb_share_list& shareList);
-const char* smbc_get_errorInfo(SMBContext& smbc);
-void* smbc_opendir(SMBContext& smbc);
-void* smbc_readdir(SMBContext& smbc, void*& dir);
-void smbc_resolve_file_stat(SMBContext& smbc, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir);
-void smbc_closedir(SMBContext& smbc, void* files);
-void* smbc_open(const char* file, int flag);
-int64_t smbc_seek(void* fh, int64_t offset, int whence);
-int64_t smbc_get_file_size(void* fh);
-int smbc_get_max_read_size();
-int smbc_read(void* fh, uint8_t* buf, uint32_t len);
-void smbc_close(void* fh);

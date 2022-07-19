@@ -1,5 +1,6 @@
 #include "NetworkModule.h"
 #include "runner.h"
+#include "logger.h"
 
 namespace NetworkModule
 {
@@ -20,8 +21,15 @@ namespace NetworkModule
 
     void Init()
     {
-        //SetLogFile("./NetFramework.log");
+        if (logger::SetLogFile("./NetFramework.log"))
+            logger::OpenFile();
+
         InitProtocols();
+    }
+
+    void Finish()
+    {
+        FinishProtocols();
     }
 
     extern "C" runner<std::function<int(Context*)>, Context*> *GetSearchRunner()

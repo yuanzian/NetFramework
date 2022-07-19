@@ -16,6 +16,7 @@ int main()
     WSAStartup(MAKEWORD(1, 1), &wsaData);
     SetConsoleOutputCP(CP_UTF8);
 #endif
+    Init();
     //std::cout << std::boolalpha << logger::SetLogFile(R"(./test.log)") << std::endl;
     //std::cout << std::boolalpha << logger::OpenFile() << std::endl;
 
@@ -35,8 +36,6 @@ int main()
     };
 
     std::cout << std::boolalpha << GetBrowseRunner()->IsInitialized() << '\n';
-    logger::Log(logger::logLevel::Trace, "{}", ctx.proto->name);
-
 
     GetBrowseRunner()->CreateTask(&ctx, "");
 
@@ -44,6 +43,8 @@ int main()
 
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(7s);
+
+    Finish();
 
 #if _WIN32
     system("pause");

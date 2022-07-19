@@ -33,4 +33,6 @@ struct Context
 };
 
 void InitProtocols();
+void FinishProtocols();
+
 std::optional<const Protocol> FindProtocol(const std::string& name);

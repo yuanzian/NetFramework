@@ -20,6 +20,16 @@ void InitProtocols()
     }
 }
 
+void FinishProtocols()
+{
+    for (auto& it : protocols)
+    {
+        auto& fini_func = it.second.finish;
+        if (fini_func)
+            std::invoke(fini_func);
+    }
+}
+
 std::optional<const Protocol> FindProtocol(const std::string& name)
 {
     return protocols.contains(name) ? std::optional<const Protocol>{protocols.at(name)} : std::nullopt;
