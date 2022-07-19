@@ -22,6 +22,7 @@ using namespace std::chrono_literals;
 #define SMB2_CONNECTION_TIMEOUT (3s).count()
 #define DESTROY_CONTEXT_DELAY_TIME (30s).count()
 
+netbios_ns* ns = nullptr;
 SMBContext::~SMBContext()
 {
     if (session)
@@ -42,14 +43,34 @@ SMBContext::~SMBContext()
 extern const Protocol smb_protocol =
 {
     .name = "smb",
+    .init = smb_init,
     .discover = smb_discover,
     .browse = smb_browse
 };
 
+static int smb_init()
+{
+    if (ns != nullptr)
+        return -1;
+    ns = netbios_ns_new();
+    return 0;
+}
+
+static int smb_finish()
+{
+    int ret = 0;
+    if (ns)
+    {
+        ret = netbios_ns_discover_stop(ns);
+        netbios_ns_destroy(ns);
+        ns = nullptr;
+    }
+    return ret;
+}
+
 static int smb_discover(std::shared_ptr<void> priv_data)
 {
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(priv_data);
-    netbios_ns* ns = netbios_ns_new();
+    SMBContext& smbc = *static_cast<SMBContext*>(priv_data.get());
 
     const netbios_ns_discover_callbacks callback
     {
@@ -73,7 +94,7 @@ static int smb_discover(std::shared_ptr<void> priv_data)
 
 static int smb_browse(std::shared_ptr<void> priv_data)
 {
-    std::shared_ptr<SMBContext> smbc = std::static_pointer_cast<SMBContext>(priv_data);
+    SMBContext& smbc = *static_cast<SMBContext*>(priv_data.get());
 
     std::vector<std::tuple<std::string, uint64_t, uint64_t>> vectorVideoProperty;
     std::vector<std::string> vectorSubtitleProperty;
@@ -87,114 +108,132 @@ static int smb_browse(std::shared_ptr<void> priv_data)
 
     xt << "<folderxml>";
     int ret = smbc_connect_share(smbc);
-    files = smbc_opendir(smbc);
-    while ((file = smbc_readdir(smbc, files)) != nullptr)
+    if (smbc.share == "IPC$")
     {
-        std::string name;
-        uint64_t cTime;
-        uint64_t size;
-        bool isDir;
-        smbc_resolve_file_stat(smbc, file, name, cTime, size, isDir);
+        smb_share_list shareList;
+        if (smbc_get_shareList(smbc, shareList) || !shareList)
+        {
+            logger::Log(logger::logLevel::Error, "Get share list failed, cause: {}", smbc_get_errorInfo(smbc));
+            //goto error;
+        }
 
-        if (isDir)
+        for (size_t i = 0; shareList[i] != nullptr; ++i)
         {
-            xt << R"(<item type="directory"><name>)" << name << R"(</name>)" << R"(<date>)" << cTime << R"(</date></item>)";
-        }
-        else if (IsVideo(name))
-        {
-            vectorVideoProperty.emplace_back(name, cTime, size);
-        }
-        else if (IsSubtitle(name) && size > 0 && (size >> 20) < 5)
-        {
-            vectorSubtitleProperty.emplace_back(name);
-        }
-        else if (IsPicture(name))
-        {
-            vectorPictureProperty.emplace_back(name);
+            xt << "<item>" << shareList[i] << "</item>";
         }
     }
-    smbc_closedir(smbc, files);
+    else {
 
-    if (!vectorVideoProperty.empty() && !vectorSubtitleProperty.empty())
-    {
-        for (const auto& [video, cTime, size] : vectorVideoProperty)
+        files = smbc_opendir(smbc);
+        while ((file = smbc_readdir(smbc, files)) != nullptr)
         {
-            std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
-            for (auto it = vectorSubtitleProperty.begin(); it != vectorSubtitleProperty.end();)
+            std::string name;
+            uint64_t cTime;
+            uint64_t size;
+            bool isDir;
+            smbc_resolve_file_stat(smbc, file, name, cTime, size, isDir);
+
+            if (isDir)
             {
-                std::string subtitle = *it;
-                std::string subtitleWithoutSuffix = subtitle.substr(0, subtitle.find_last_of('.'));
-                if (is_video_name_match(subtitleWithoutSuffix, videoWithoutSuffix)
-                    || subtitleWithoutSuffix.find(videoWithoutSuffix) != std::string::npos)
-                {
-                    mapSubtitleProperty.emplace(video, subtitle);
-                    it = vectorSubtitleProperty.erase(it);
-                }
-                else ++it;
+                xt << R"(<item type="directory"><name>)" << name << R"(</name>)" << R"(<date>)" << cTime << R"(</date></item>)";
+            }
+            else if (IsVideo(name))
+            {
+                vectorVideoProperty.emplace_back(name, cTime, size);
+            }
+            else if (IsSubtitle(name) && size > 0 && (size >> 20) < 5)
+            {
+                vectorSubtitleProperty.emplace_back(name);
+            }
+            else if (IsPicture(name))
+            {
+                vectorPictureProperty.emplace_back(name);
             }
         }
-    }
+        smbc_closedir(smbc, files);
 
-    if (!vectorVideoProperty.empty() && !vectorPictureProperty.empty())
-    {
-        for (const auto& [video, cTime, size] : vectorVideoProperty)
+        if (!vectorVideoProperty.empty() && !vectorSubtitleProperty.empty())
         {
-            std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
-            for (const std::string& picture : vectorPictureProperty)
+            for (const auto& [video, cTime, size] : vectorVideoProperty)
             {
-                std::string pictureWithoutSuffix = picture.substr(0, picture.find_last_of('.'));
-                if (videoWithoutSuffix == pictureWithoutSuffix)
+                std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
+                for (auto it = vectorSubtitleProperty.begin(); it != vectorSubtitleProperty.end();)
                 {
-                    mapThumbnailProperty.emplace(video, picture);
-                    break;
+                    std::string subtitle = *it;
+                    std::string subtitleWithoutSuffix = subtitle.substr(0, subtitle.find_last_of('.'));
+                    if (is_video_name_match(subtitleWithoutSuffix, videoWithoutSuffix)
+                        || subtitleWithoutSuffix.find(videoWithoutSuffix) != std::string::npos)
+                    {
+                        mapSubtitleProperty.emplace(video, subtitle);
+                        it = vectorSubtitleProperty.erase(it);
+                    }
+                    else ++it;
                 }
             }
         }
-    }
 
-    for (const auto& [video, cTime, size] : vectorVideoProperty)
-    {
-        xt << R"(<item type="file"><name>)" << video <<
-            "</name><date>" << cTime <<
-            "</date><size>" << size << "</size>";
+        if (!vectorVideoProperty.empty() && !vectorPictureProperty.empty())
+        {
+            for (const auto& [video, cTime, size] : vectorVideoProperty)
+            {
+                std::string videoWithoutSuffix = video.substr(0, video.find_last_of('.'));
+                for (const std::string& picture : vectorPictureProperty)
+                {
+                    std::string pictureWithoutSuffix = picture.substr(0, picture.find_last_of('.'));
+                    if (videoWithoutSuffix == pictureWithoutSuffix)
+                    {
+                        mapThumbnailProperty.emplace(video, picture);
+                        break;
+                    }
+                }
+            }
+        }
 
-        const auto& [subtitleEntryBegin, subtitleEntryEnd] = mapSubtitleProperty.equal_range(video);
-        for_each(subtitleEntryBegin, subtitleEntryEnd,
-            [&](std::pair<const std::string, std::string>& subtitleEntry) {
-                xt << "<subtitle>" << subtitleEntry.second << "</subtitle>";
-            });
+        for (const auto& [video, cTime, size] : vectorVideoProperty)
+        {
+            xt << R"(<item type="file"><name>)" << video <<
+                "</name><date>" << cTime <<
+                "</date><size>" << size << "</size>";
 
-        const auto& [thumbnailEntryBegin, thumbnailEntryEnd] = mapThumbnailProperty.equal_range(video);
-        for_each(thumbnailEntryBegin, thumbnailEntryEnd,
-            [&](std::pair<const std::string, std::string>& thumbnailEntry) {
-                xt << "<thumbnail>" << thumbnailEntry.second << "</thumbnail>";
-            });
-        xt << "</item>";
+            const auto& [subtitleEntryBegin, subtitleEntryEnd] = mapSubtitleProperty.equal_range(video);
+            for_each(subtitleEntryBegin, subtitleEntryEnd,
+                [&](std::pair<const std::string, std::string>& subtitleEntry) {
+                    xt << "<subtitle>" << subtitleEntry.second << "</subtitle>";
+                });
+
+            const auto& [thumbnailEntryBegin, thumbnailEntryEnd] = mapThumbnailProperty.equal_range(video);
+            for_each(thumbnailEntryBegin, thumbnailEntryEnd,
+                [&](std::pair<const std::string, std::string>& thumbnailEntry) {
+                    xt << "<thumbnail>" << thumbnailEntry.second << "</thumbnail>";
+                });
+            xt << "</item>";
+        }
     }
     xt << "</folderxml>";
+    smbc_disconnect_share(smbc);
     logger::Log(logger::logLevel::Trace, "{}", xt.str());
     return 0;
 }
 
-LoginError smbc_connect_share(std::shared_ptr<SMBContext> smbc)
+LoginError smbc_connect_share(SMBContext& smbc)
 {
     LoginError loginErrorCode = SMBC_LOGIN_SUCCESS;
-    logger::Log(logger::logLevel::Info, "Trying to connect {} with SMB2 protocol.", smbc->server);
-    smbc->smb2 = smb2_init_context();
-    if (smbc->smb2 == nullptr)
+    logger::Log(logger::logLevel::Info, "Trying to connect {} with SMB2 protocol.", smbc.server);
+    smbc.smb2 = smb2_init_context();
+    if (smbc.smb2 == nullptr)
     {
         logger::Log(logger::logLevel::Error, "Init SMB2 session failed: smb://{}:{}@{}/{}",
-            smbc->userID, smbc->password, smbc->server, smbc->share);
+            smbc.userID, smbc.password, smbc.server, smbc.share);
         return SMBC_LOGIN_INITSESSIONERROR;
     }
 
 connect:
-    smb2_set_security_mode(smbc->smb2, SMB2_NEGOTIATE_SIGNING_ENABLED);
-    smb2_set_timeout(smbc->smb2, SMB2_CONNECTION_TIMEOUT);
+    smb2_set_security_mode(smbc.smb2, SMB2_NEGOTIATE_SIGNING_ENABLED);
+    smb2_set_timeout(smbc.smb2, SMB2_CONNECTION_TIMEOUT);
 
-    if (smb2_connect_share(smbc->smb2, smbc->server.c_str(), smbc->share.c_str(), smbc->userID.c_str(), smbc->password.c_str()) < 0)
+    if (smb2_connect_share(smbc.smb2, smbc.server.c_str(), smbc.share.c_str(), smbc.userID.c_str(), smbc.password.c_str()) < 0)
     {
-        const char* errorMsg = smb2_get_error(smbc->smb2);
+        const char* errorMsg = smb2_get_error(smbc.smb2);
         if (strstr(errorMsg, "STATUS_LOGON_FAILURE") ||
             strstr(errorMsg, "STATUS_PASSWORD_EXPIRED") ||
             strstr(errorMsg, "STATUS_PASSWORD_MUST_CHANGE") ||
@@ -203,13 +242,13 @@ connect:
             loginErrorCode = SMBC_LOGIN_PASSWORDERROR;
         else if (strstr(errorMsg, "STATUS_ACCESS_DENIED"))
         {
-            if (smb2_get_negotiate_version(smbc->smb2) == SMB2_VERSION_ANY || smb2_get_negotiate_version(smbc->smb2) == SMB2_VERSION_0311)
+            if (smb2_get_negotiate_version(smbc.smb2) == SMB2_VERSION_ANY || smb2_get_negotiate_version(smbc.smb2) == SMB2_VERSION_0311)
             {
                 logger::Log(logger::logLevel::Warning, "Cur negotiate version is SMB2_VERSION_0311, try to use ANY_VERSION_EXCEPT_0311.");
-                smb2_disconnect_share(smbc->smb2);
-                smb2_destroy_context(smbc->smb2);
-                smbc->smb2 = smb2_init_context();
-                smb2_set_negotiate_version(smbc->smb2, SMB2_VERSION_ANYEXCEPT0311);
+                smb2_disconnect_share(smbc.smb2);
+                smb2_destroy_context(smbc.smb2);
+                smbc.smb2 = smb2_init_context();
+                smb2_set_negotiate_version(smbc.smb2, SMB2_VERSION_ANYEXCEPT0311);
                 goto connect;
             }
             loginErrorCode = SMBC_LOGIN_AUTHORITYERROR;
@@ -229,27 +268,27 @@ connect:
 
     if (loginErrorCode == SMBC_LOGIN_SUCCESS || loginErrorCode == SMBC_LOGIN_AUTHORITYERROR)
     {
-        smbc->version = static_cast<SMBContext::SambaVersion>(smb2_get_dialect_version(smbc->smb2));
+        smbc.version = static_cast<SMBContext::SambaVersion>(smb2_get_dialect_version(smbc.smb2));
 
         logger::Log(loginErrorCode == SMBC_LOGIN_SUCCESS ? logger::logLevel::Info : logger::logLevel::Error,
             "Create SMB2 session: smb-v{:x}://{}:{}@{}/{}, return {}",
-            static_cast<int>(smbc->version),
-            smbc->userID,
-            smbc->password,
-            smbc->server,
-            smbc->share,
+            static_cast<int>(smbc.version),
+            smbc.userID,
+            smbc.password,
+            smbc.server,
+            smbc.share,
             static_cast<int>(loginErrorCode));
         return loginErrorCode;
     }
     else if (loginErrorCode == SMBC_LOGIN_PROTOCOLERROR || loginErrorCode == SMBC_LOGIN_CONNECTIONERROR || loginErrorCode == SMBC_LOGIN_UNKNOWNERROR)
     {
-        logger::Log(logger::logLevel::Info, "Trying to connect {} with SMB1 protocol.", smbc->server);
+        logger::Log(logger::logLevel::Info, "Trying to connect {} with SMB1 protocol.", smbc.server);
         loginErrorCode = SMBC_LOGIN_SUCCESS;
         unsigned int addr = 0;
         struct addrinfo* p_info = nullptr;
         std::promise<int> connectPromise;
         std::future<int> connectFuture = connectPromise.get_future();
-        if (getaddrinfo(smbc->server.c_str(), nullptr, nullptr, &p_info) == 0 && p_info->ai_family == AF_INET)
+        if (getaddrinfo(smbc.server.c_str(), nullptr, nullptr, &p_info) == 0 && p_info->ai_family == AF_INET)
         {
             struct sockaddr_in* in = (struct sockaddr_in*)p_info->ai_addr;
             addr = in->sin_addr.s_addr;
@@ -260,17 +299,17 @@ connect:
             goto error;
         }
 
-        smbc->session = smb_session_new();
+        smbc.session = smb_session_new();
         std::thread(
             [&](std::promise<int> res) {
-                res.set_value(smb_session_connect(smbc->session, smbc->server.c_str(), addr, SMB_TRANSPORT_TCP));
+                res.set_value(smb_session_connect(smbc.session, smbc.server.c_str(), addr, SMB_TRANSPORT_TCP));
             }
         , std::move(connectPromise)).detach();
 
         switch (connectFuture.wait_for(SMB1_CONNECTION_TIMEOUT))
         {
         case std::future_status::timeout:
-            smbc->delayDeconstruct = time(nullptr) + DESTROY_CONTEXT_DELAY_TIME;
+            smbc.delayDeconstruct = time(nullptr) + DESTROY_CONTEXT_DELAY_TIME;
             loginErrorCode = SMBC_LOGIN_CONNECTIONERROR;
             goto error;
             break;
@@ -285,39 +324,70 @@ connect:
             break;
         }
 
-        smb_session_set_creds(smbc->session, smbc->server.c_str(), smbc->userID.c_str(), smbc->password.c_str());
-        if (smb_session_login(smbc->session) != DSM_SUCCESS)
+        smb_session_set_creds(smbc.session, smbc.server.c_str(), smbc.userID.c_str(), smbc.password.c_str());
+        if (smb_session_login(smbc.session) != DSM_SUCCESS)
         {
             loginErrorCode = SMBC_LOGIN_PASSWORDERROR;
             goto error;
         }
-        loginErrorCode = (LoginError)smb_tree_connect(smbc->session, smbc->share.data(), &smbc->tid);
+        loginErrorCode = (LoginError)smb_tree_connect(smbc.session, smbc.share.data(), &smbc.tid);
         if (loginErrorCode != DSM_SUCCESS)
             goto error;
 
-        if (smb_session_is_guest(smbc->session) == 1)
+        if (smb_session_is_guest(smbc.session) == 1)
         {
             logger::Log(logger::logLevel::Info, "Logged in with Guest");
         }
 
         logger::Log(logger::logLevel::Info,
             "Connecting SMB1 server SUCCESS: smb1://{}:{}@{}/{}",
-            smbc->userID,
-            smbc->password,
-            smbc->server,
-            smbc->share);
-        smbc->version = SMBContext::SambaVersion::SMB1;
+            smbc.userID,
+            smbc.password,
+            smbc.server,
+            smbc.share);
+        smbc.version = SMBContext::SambaVersion::SMB1;
         return loginErrorCode;
     }
 
 error:
     logger::Log(logger::logLevel::Error, "Connecting SMB server failed: smb://{}:{}@{}/{}, return {}",
-        smbc->userID,
-        smbc->password,
-        smbc->server,
-        smbc->share,
+        smbc.userID,
+        smbc.password,
+        smbc.server,
+        smbc.share,
         static_cast<int>(loginErrorCode));
     return loginErrorCode;
+}
+
+void smbc_disconnect_share(SMBContext& smbc)
+{
+    using enum SMBContext::SambaVersion;
+
+    switch (smbc.version)
+    {
+    case SMB1:
+        if (smbc.session)
+        {
+            if (smbc.tid != 0)
+                smb_tree_disconnect(smbc.session, smbc.tid);
+            smb_session_destroy(smbc.session);
+            smbc.session = nullptr;
+        }
+    case SMB2_02:
+    case SMB2_10:
+    case SMB3_00:
+    case SMB3_02:
+    case SMB3_11:
+        if (smbc.smb2)
+        {
+            smb2_disconnect_share(smbc.smb2);
+            smb2_destroy_context(smbc.smb2);
+            smbc.smb2 = nullptr;
+        }
+        break;
+    default:
+        return;
+    }
 }
 //
 //bool IsValid()
@@ -332,50 +402,68 @@ error:
 //    }
 //}
 //
-//int smbc_get_shareList(smb_share_list& shareList)
-//{
-//    if (version == SMB1)
-//        return smb_share_get_list(session, tid, &shareList, nullptr);
-//    else
-//    {
-//        return (shareList = smb2_share_enum(smb2)) ? 0 : -1;
-//    }
-//}
-//
-//const char* smbc_get_errorInfo()
-//{
-//    if (version == SMB1)
-//        return "NTERRNO:";
-//    else
-//    {
-//        return smb2_get_error(smb2);
-//    }
-//}
-//
-void* smbc_opendir(std::shared_ptr<SMBContext> smbc)
+int smbc_get_shareList(SMBContext& smbc, smb_share_list& shareList)
 {
     using enum SMBContext::SambaVersion;
 
-    switch (smbc->version)
+    switch (smbc.version)
     {
     case SMB1:
-        return smb_find(smbc->session, smbc->tid, (smbc->path + "\\*").data());
+        return smb_share_get_list(smbc.session, smbc.tid, &shareList, nullptr);
     case SMB2_02:
     case SMB2_10:
     case SMB3_00:
     case SMB3_02:
     case SMB3_11:
-        return smb2_opendir(smbc->smb2, smbc->path.data());
+        return (shareList = smb2_share_enum(smbc.smb2)) ? 0 : -1;
+    default:
+        return 0;
+    }
+}
+
+const char* smbc_get_errorInfo(SMBContext& smbc)
+{
+    using enum SMBContext::SambaVersion;
+
+    switch (smbc.version)
+    {
+    case SMB1:
+        return "NTERRNO:";
+    case SMB2_02:
+    case SMB2_10:
+    case SMB3_00:
+    case SMB3_02:
+    case SMB3_11:
+        return smb2_get_error(smbc.smb2);
     default:
         return nullptr;
     }
 }
 
-void* smbc_readdir(std::shared_ptr<SMBContext> smbc, void*& dir)
+void* smbc_opendir(SMBContext& smbc)
 {
     using enum SMBContext::SambaVersion;
 
-    switch (smbc->version)
+    switch (smbc.version)
+    {
+    case SMB1:
+        return smb_find(smbc.session, smbc.tid, (smbc.path + "\\*").data());
+    case SMB2_02:
+    case SMB2_10:
+    case SMB3_00:
+    case SMB3_02:
+    case SMB3_11:
+        return smb2_opendir(smbc.smb2, smbc.path.data());
+    default:
+        return nullptr;
+    }
+}
+
+void* smbc_readdir(SMBContext& smbc, void*& dir)
+{
+    using enum SMBContext::SambaVersion;
+
+    switch (smbc.version)
     {
     case SMB1:
         return smb_stat_list_read((smb_stat_list*)&dir);
@@ -384,17 +472,17 @@ void* smbc_readdir(std::shared_ptr<SMBContext> smbc, void*& dir)
     case SMB3_00:
     case SMB3_02:
     case SMB3_11:
-        return smb2_readdir(smbc->smb2, (smb2dir*)dir);
+        return smb2_readdir(smbc.smb2, (smb2dir*)dir);
     default:
         return nullptr;
     }
 }
 
-void smbc_resolve_file_stat(std::shared_ptr<SMBContext> smbc, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
+void smbc_resolve_file_stat(SMBContext& smbc, void* ent, std::string& name, uint64_t& cTime, uint64_t& size, bool& isDir)
 {
     using enum SMBContext::SambaVersion;
 
-    switch (smbc->version)
+    switch (smbc.version)
     {
     case SMB1:
     {
@@ -423,11 +511,11 @@ void smbc_resolve_file_stat(std::shared_ptr<SMBContext> smbc, void* ent, std::st
     }
 }
 
-void smbc_closedir(std::shared_ptr<SMBContext> smbc, void* files)
+void smbc_closedir(SMBContext& smbc, void* files)
 {
     using enum SMBContext::SambaVersion;
 
-    switch (smbc->version)
+    switch (smbc.version)
     {
     case SMB1:
         smb_stat_list_destroy((smb_stat_list)files);
@@ -437,7 +525,7 @@ void smbc_closedir(std::shared_ptr<SMBContext> smbc, void* files)
     case SMB3_00:
     case SMB3_02:
     case SMB3_11:
-        smb2_closedir(smbc->smb2, (smb2dir*)files);
+        smb2_closedir(smbc.smb2, (smb2dir*)files);
         break;
     default:
         break;

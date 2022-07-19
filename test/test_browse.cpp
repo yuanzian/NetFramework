@@ -37,6 +37,7 @@ int main()
     std::cout << std::boolalpha << GetBrowseRunner()->IsInitialized() << '\n';
     logger::Log(logger::logLevel::Trace, "{}", ctx.proto->name);
 
+
     GetBrowseRunner()->CreateTask(&ctx, "");
 
     GetBrowseRunner()->AddToConsumer(&ctx, "");

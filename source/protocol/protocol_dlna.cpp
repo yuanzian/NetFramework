@@ -459,6 +459,8 @@ static int dlna_init()
 #if __ANDROID__ || __linux__
     int res = UpnpInit2(nullptr, 0);
 #elif _WIN64
+    UpnpSetLogLevel(Upnp_LogLevel::UPNP_ERROR);
+    UpnpInitLog();
     char8_t* bestAdapterName = GetBestAdapterInterfaceName();
     int res = UpnpInit2(reinterpret_cast<char*>(bestAdapterName), 0);
     free(bestAdapterName);
