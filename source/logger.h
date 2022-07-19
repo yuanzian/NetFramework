@@ -10,6 +10,7 @@ namespace logger {
 
     bool SetLogFile(const std::string_view& path);
     bool OpenFile();
+    bool CloseFile();
 
     enum class logLevel : char
     {

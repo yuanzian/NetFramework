@@ -30,6 +30,8 @@ namespace NetworkModule
     void Finish()
     {
         FinishProtocols();
+
+        logger::CloseFile();
     }
 
     extern "C" runner<std::function<int(Context*)>, Context*> *GetSearchRunner()

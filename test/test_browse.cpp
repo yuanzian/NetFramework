@@ -6,8 +6,8 @@
 #include "source/protocol/protocol_smb.h"
 #include "source/logger.h"
 
-
 using namespace NetworkModule;
+using namespace std::chrono_literals;
 
 int main()
 {
@@ -35,13 +35,7 @@ int main()
         .priority = Context::Priority::S
     };
 
-    std::cout << std::boolalpha << GetBrowseRunner()->IsInitialized() << '\n';
-
-    GetBrowseRunner()->CreateTask(&ctx, "");
-
     GetBrowseRunner()->AddToConsumer(&ctx, "");
-
-    using namespace std::chrono_literals;
     std::this_thread::sleep_for(7s);
 
     Finish();

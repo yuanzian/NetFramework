@@ -20,4 +20,10 @@ namespace logger {
         return true;
     }
 
+    bool CloseFile()
+    {
+        logStream.close();
+        return true;
+    }
+
 }// namespace logger

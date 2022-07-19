@@ -40,7 +40,7 @@ int main()
     GetSearchRunner()->AddToConsumer(&ctx);
     GetSearchRunner()->AddToConsumer(&ctx1);
 
-
+    //Finish();
 #if _WIN32
     system("pause");
     WSACleanup();

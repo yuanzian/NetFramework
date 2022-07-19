@@ -18,7 +18,7 @@ struct Protocol
 /*!
 * @struct Context
 * @brief indispensable component of the Task handled by runner.
-* 
+*
 * @param proto: current context protocol, must discard the context while being nullopt.
 * @param priv_data: pointer to a structure of the detail informations according to current context protocol.
 */

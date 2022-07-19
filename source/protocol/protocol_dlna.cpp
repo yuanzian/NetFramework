@@ -512,7 +512,7 @@ static int dlna_discover(std::shared_ptr<void> ctx)
     int res = UpnpSearchAsync(handle, MAX_SEARCH_TIME, MEDIA_SERVER_DEVICE_TYPE, nullptr);
     if (res != UPNP_E_SUCCESS)
     {
-        logger::Log(logger::logLevel::Error, "Searching server failed");
+        logger::Log(logger::logLevel::Error, "Searching server failed, return {}", UpnpGetErrorMessage(res));
         return res;
     }
     logger::Log(logger::logLevel::Info, "Searching server success");
