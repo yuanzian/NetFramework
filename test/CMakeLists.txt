@@ -1,5 +1,6 @@
 add_executable(test_discover)
 target_sources(test_discover PRIVATE
+    "${CMAKE_SOURCE_DIR}/source/logger.cpp"
     "test_discover.cpp"
 )
 
@@ -30,6 +31,7 @@ target_include_directories(test_discover PRIVATE
 
 add_executable(test_browse)
 target_sources(test_browse PRIVATE
+    "${CMAKE_SOURCE_DIR}/source/logger.cpp"
     "test_browse.cpp"
 )
 

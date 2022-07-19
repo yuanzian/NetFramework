@@ -6,6 +6,7 @@
 #include <functional>
 #include <concepts>
 #include <iostream>
+
 #include "protocol/protocol.h"
 
 struct Result

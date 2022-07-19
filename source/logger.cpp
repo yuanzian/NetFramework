@@ -1,6 +1,7 @@
 #include "logger.h"
 
 namespace logger {
+
     const std::filesystem::path logFile;
     std::ofstream logStream;
 

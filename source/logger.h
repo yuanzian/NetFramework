@@ -6,7 +6,6 @@
 
 namespace logger {
 
-    extern const std::filesystem::path logFile;
     extern std::ofstream logStream;
 
     bool SetLogFile(const std::string_view& path);
@@ -29,8 +28,8 @@ namespace logger {
             const std::source_location& location = std::source_location::current())
         {
             time_t current = std::time(nullptr);
-            std::ostream* tmp = logStream.is_open() ? &logStream : &std::cout;
-            *tmp << std::left
+            std::ostream* os = logStream.is_open() ? &logStream : &std::cout;
+            *os << std::left
                 << std::put_time(std::localtime(&current), "%F %T ")
                 << "[" << static_cast<char>(level) << "]"
                 << "[thread " << std::this_thread::get_id() << "] "

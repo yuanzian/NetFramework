@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <functional>
+#include <optional>
 
 struct Protocol
 {
@@ -14,16 +15,22 @@ struct Protocol
     std::function<int(std::shared_ptr<void>)> browse;
 };
 
+/*!
+* @struct Context
+* @brief indispensable component of the Task handled by runner.
+* 
+* @param proto: current context protocol, must discard the context while being nullopt.
+* @param priv_data: pointer to a structure of the detail informations according to current context protocol.
+*/
 struct Context
 {
-    const struct Protocol proto;
+    std::optional<const Protocol> proto;
     std::shared_ptr<void> priv_data;
     enum Priority
     {
         S, A, B, C
     }priority;
-
-    Context operator=(const Context& other) { return other; }
 };
 
-Protocol FindProtocol(const std::string& name);
+void InitProtocols();
+std::optional<const Protocol> FindProtocol(const std::string& name);
